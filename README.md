@@ -82,9 +82,9 @@ python manage.py runserver 127.0.0.1:8000
 
 1. **`stage_order` 方向**：`1` = 最先点火的最下面一级（起飞级）；页面**降序**渲染（最上级在顶部），Δv **升序**累加（第 1 级的 `m₀` 要含上方所有级 + 载荷）。
 2. **`sma` 不是高度**：高度 = `sma − Body.radius`（Kerbin 600 km）。混淆会产生 600 km 量级误差。
-3. **多态 FK 不用 `GenericForeignKey`**：`Stage` 与 `ProgramLink` 用 `owner_type` + 可空 FK + CHECK；否则无法建立数据库级外键与约束。
+3. **Δv 用 `G0 = 9.80665` 常数，不用所在天体的重力**：用当地重力在 Kerbin 上只差 0.03%（测不出来），在 Mun 上差 83%。防护办法是 `stage_delta_v()` 的签名里不出现任何重力参数。
 
-完整说明见 [`docs/spec/01-架构与开发指南.md`](docs/spec/01-架构与开发指南.md) §5。
+完整说明见 [`docs/spec/00-最小系统.md`](docs/spec/00-最小系统.md) §7。**注意：v1 里没有多态外键**（级直接挂火箭，航天计划用普通外键），所以「不用 `GenericForeignKey`」不再是本项目的注意事项。
 
 ---
 
