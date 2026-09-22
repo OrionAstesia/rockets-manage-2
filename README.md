@@ -60,16 +60,11 @@ python manage.py runserver 127.0.0.1:8000
 
 ## 文档
 
-开发只需读 4 份手册，入口是 [`docs/README.md`](docs/README.md)：
+**只读这一份**：[`docs/spec/00-最小系统.md`](docs/spec/00-最小系统.md) —— 唯一权威源，11 张表 / 5 个 app / 7 个计算函数 / 3 个前台页面，一份文档讲完。
 
-| 文件 | 内容 |
-|---|---|
-| [`docs/spec/01-架构与开发指南.md`](docs/spec/01-架构与开发指南.md) | **必读**：项目范围、技术栈、目录结构、分层职责、编码规范、最易出错的约定、里程碑、陷阱清单 |
-| [`docs/spec/02-数据模型与数据库.md`](docs/spec/02-数据模型与数据库.md) | **必读**：14 张表的唯一权威字段定义、枚举、约束、种子数据、migrations 顺序 |
-| [`docs/spec/03-核心计算与services.md`](docs/spec/03-核心计算与services.md) | Δv / 推重比 / 轨道周期的公式、`services/` 函数签名、单元测试断言值 |
-| [`docs/spec/04-路由表单与页面.md`](docs/spec/04-路由表单与页面.md) | 50 条路由、表单校验、`Stage` 的 FormSet 难点、页面与展示规范 |
+开发不需要读别的。`docs/archive/` 是设计过程存档（早期更庞大、已作废的设计），只在想知道「为什么这样定」时翻。
 
-`docs/archive/` 是设计过程存档（需求论证、技术选型对比、旧系统债务清单），**开发不需要读**。只有想知道「某个设计为什么这样定」时翻它的 `_design-brief.md`（决策记录 `D-01`~`D-23`）。
+**边界**：无 JavaScript、无 AJAX、无多态外键、无 1:1 继承、无嵌套 FormSet、无新依赖（只要 Django）。写操作全部走 Django Admin，前台只负责看。
 
 ---
 

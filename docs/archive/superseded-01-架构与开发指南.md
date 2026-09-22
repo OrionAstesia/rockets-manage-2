@@ -49,6 +49,7 @@ python -c "import django; print(django.get_version())"   # 必须是 5.2.x
 - ⚠️ **PATH 上的 `python` 是 `D:\MinGW\bin\python.exe`，没有 Django。** 必须 `conda activate rocket`。
 - ⚠️ **`conda` 不在 PATH**，可执行文件在 `F:\Anaconda\Scripts\conda.exe`。必要时用全路径。
 - 不要用 `OrionDB` 环境（Python 3.9，缺依赖），也不要污染 `rag` 环境。
+- 经测试，rocket 环境中的 django 版本为 5.2.17
 
 ---
 
