@@ -41,6 +41,9 @@ INSTALLED_APPS = [
     # 本项目的 5 个 app（规格 §10）
     'core',
     'parts',
+    'fleet',
+    'spaceflight',
+    'ops',
 ]
 
 MIDDLEWARE = [

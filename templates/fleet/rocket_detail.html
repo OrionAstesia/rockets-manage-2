@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+
+{% block title %}{{ rocket.name }} · 火箭详情{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-end mb-3">
+  <h1 class="h4 mb-0">{{ rocket.name }}</h1>
+  <a class="btn btn-sm btn-outline-secondary" href="/admin/fleet/rocket/{{ rocket.pk }}/change/">
+    在后台编辑
+  </a>
+</div>
+
+<div class="card mb-4">
+  <div class="card-body">
+    <dl class="row mb-0 small">
+      <dt class="col-sm-2">所属存档</dt><dd class="col-sm-4">{{ rocket.save }}</dd>
+      <dt class="col-sm-2">系列</dt><dd class="col-sm-4">{{ rocket.series|default:"—" }}</dd>
+
+      <dt class="col-sm-2">制造商</dt><dd class="col-sm-4">{{ rocket.manufacturer|default:"—" }}</dd>
+      <dt class="col-sm-2">最大直径</dt>
+      <dd class="col-sm-4">{{ rocket.diameter|default_if_none:"—" }}{% if rocket.diameter %} m{% endif %}</dd>
+
+      <dt class="col-sm-2">首飞日期</dt>
+      <dd class="col-sm-4">{{ rocket.first_flight_date|default_if_none:"—" }}</dd>
+      <dt class="col-sm-2">乘员容量</dt><dd class="col-sm-4">{{ rocket.crew_capacity }}</dd>
+
+      <dt class="col-sm-2">可回收复用</dt>
+      <dd class="col-sm-4">{{ rocket.is_reusable|yesno:"是,否" }}</dd>
+      <dt class="col-sm-2">备注</dt><dd class="col-sm-4">{{ rocket.note|default:"—" }}</dd>
+    </dl>
+  </div>
+</div>
+
+<div class="alert alert-info">
+  ℹ 本页自上而下显示，底部为第 1 级（最先点火的起飞级）。Δv 从第 1 级起向上累加。
+</div>
+
+<h2 class="h5">级序与 Δv</h2>
+<div class="table-responsive">
+  <table class="table table-sm table-striped align-middle">
+    <thead class="table-light">
+      <tr>
+        <th>级序</th>
+        <th>引擎</th>
+        <th>燃料罐</th>
+        <th class="text-end">结构质量 (t)</th>
+        <th class="text-end">燃料质量 (t)</th>
+        <th class="text-end">m₀ (t)</th>
+        <th class="text-end">m_f (t)</th>
+        <th class="text-end">Δv (m/s)</th>
+        <th class="text-end">累计 Δv (m/s)</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in stage_rows reversed %}
+      <tr>
+        <td>第 {{ row.stage_order }} 级</td>
+        <td>
+          {% if row.stage.engine %}
+            {{ row.stage.engine }}{% if row.stage.engine_count > 1 %} ×{{ row.stage.engine_count }}{% endif %}
+          {% else %}—{% endif %}
+        </td>
+        <td>
+          {% if row.stage.fuel_tank %}
+            {{ row.stage.fuel_tank }}{% if row.stage.tank_count > 1 %} ×{{ row.stage.tank_count }}{% endif %}
+          {% else %}—{% endif %}
+        </td>
+        <td class="text-end">{{ row.stage.structure_mass|floatformat:2 }}</td>
+        <td class="text-end">{{ row.fuel_mass|floatformat:2 }}</td>
+        <td class="text-end">{{ row.m0|floatformat:2 }}</td>
+        <td class="text-end">{{ row.mf|floatformat:2 }}</td>
+        <td class="text-end">{{ row.delta_v|floatformat:0|default:"—" }}</td>
+        <td class="text-end">{{ row.cumulative|floatformat:0|default:"—" }}</td>
+      </tr>
+      {% empty %}
+      <tr>
+        <td colspan="9" class="text-muted">
+          这枚火箭还没有配置级。请到后台的「运载火箭」里用级内联（TabularInline）添加。
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr class="table-light">
+        <th colspan="8" class="text-end">总 Δv</th>
+        <th class="text-end">{{ total_dv|floatformat:0 }} m/s</th>
+      </tr>
+    </tfoot>
+  </table>
+</div>
+
+<p class="text-muted small mb-0">
+  逐级 Δv = <code>Isp × g₀ × ln(m₀ / m_f)</code>，其中 <code>g₀</code> 恒为标准重力 9.80665 m/s²，
+  <strong>与所在天体无关</strong>（用当地重力会算错）。第 1 级用海平面比冲，其余级用真空比冲。
+  m₀ = 本级干重 + 本级燃料 + 上方所有级 + 载荷。
+  <strong>本页 Δv 不含载荷质量</strong>（火箭与载荷之间没有外键，按 payload_mass = 0 计算）。
+</p>
+{% endblock %}
