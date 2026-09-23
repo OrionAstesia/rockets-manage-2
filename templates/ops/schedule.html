@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+
+{% block title %}发射日程 · KSP 航天计划管理器{% endblock %}
+
+{% block content %}
+<h1 class="h4 mb-1">发射日程</h1>
+<p class="text-muted">只列出「计划中」的任务，按计划发射日期从近到远排列。</p>
+
+{% if flights %}
+<div class="table-responsive">
+  <table class="table table-sm table-striped align-middle">
+    <thead class="table-light">
+      <tr>
+        <th>计划发射日期</th>
+        <th>任务名称</th>
+        <th>运载火箭</th>
+        <th>有效载荷</th>
+        <th>发射场</th>
+        <th>乘员数</th>
+        <th>所属存档</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for flight in flights %}
+      <tr>
+        <td>{{ flight.planned_date|default_if_none:"未定" }}</td>
+        <td>{{ flight.name }}</td>
+        <td>
+          <a href="{% url 'fleet:rocket_detail' flight.rocket.pk %}">{{ flight.rocket }}</a>
+        </td>
+        <td>{{ flight.payload|default:"—" }}</td>
+        <td>{{ flight.site }}</td>
+        <td>{{ flight.crew_count }}</td>
+        <td>{{ flight.program }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="alert alert-secondary">
+  目前没有计划中的发射。到<a href="/admin/ops/flightlog/add/">后台新增一条发射日志</a>，
+  状态选「计划中」并填上计划发射日期，它就会出现在这里。
+</div>
+{% endif %}
+{% endblock %}

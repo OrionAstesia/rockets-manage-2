@@ -5,6 +5,7 @@ from datetime import date
 from django.core.exceptions import ValidationError
 from django.db.models import ProtectedError
 from django.test import TestCase
+from django.urls import reverse
 
 from core.models import Body
 from fleet.models import Payload, Rocket, RocketStage
@@ -154,3 +155,56 @@ class SaveDeletePolicyTests(TestCase):
         self.flight.delete()          # 先解除 PROTECT
         self.rocket.delete()
         self.assertFalse(RocketStage.objects.filter(pk=self.stage.pk).exists())
+
+
+class SchedulePageTests(TestCase):
+    """规格 §8.2：/schedule/ 只列 state=PLANNED，按 planned_date 升序；空则显示空状态。"""
+
+    def setUp(self):
+        self.body = Body.objects.create(name="Kerbin", mu=3.5316e12, radius=600000)
+        self.save = Save.objects.create(name="生涯存档")
+        self.rocket = Rocket.objects.create(name="火箭 A", program=self.save)
+        self.site = Site.objects.create(name="发射场", program=self.save, body=self.body)
+
+    def make_flight(self, name, state, planned_date):
+        return FlightLog.objects.create(
+            name=name, state=state, planned_date=planned_date,
+            actual_date=None if state == FlightState.PLANNED else date(2026, 1, 1),
+            rocket=self.rocket, site=self.site, program=self.save,
+        )
+
+    def test_only_planned_flights_in_ascending_order(self):
+        self.make_flight("十月任务", FlightState.PLANNED, date(2026, 10, 10))
+        self.make_flight("八月任务", FlightState.PLANNED, date(2026, 8, 5))
+        self.make_flight("已发射任务", FlightState.LAUNCHED, date(2026, 7, 1))
+        self.make_flight("失败任务", FlightState.FAILED, date(2026, 7, 2))
+        self.make_flight("取消任务", FlightState.CANCELLED, date(2026, 7, 3))
+
+        response = self.client.get(reverse("ops:schedule"))
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(
+            [f.name for f in response.context["flights"]], ["八月任务", "十月任务"]
+        )
+        self.assertNotContains(response, "已发射任务")
+        self.assertNotContains(response, "取消任务")
+
+    def test_undated_planned_flight_sorts_last(self):
+        self.make_flight("日期未定任务", FlightState.PLANNED, None)
+        self.make_flight("八月任务", FlightState.PLANNED, date(2026, 8, 5))
+        self.make_flight("十月任务", FlightState.PLANNED, date(2026, 10, 10))
+        response = self.client.get(reverse("ops:schedule"))
+        self.assertEqual(
+            [f.name for f in response.context["flights"]],
+            ["八月任务", "十月任务", "日期未定任务"],
+        )
+
+    def test_page_links_to_rocket_detail(self):
+        self.make_flight("八月任务", FlightState.PLANNED, date(2026, 8, 5))
+        response = self.client.get(reverse("ops:schedule"))
+        self.assertContains(response, reverse("fleet:rocket_detail", args=[self.rocket.pk]))
+
+    def test_empty_state(self):
+        response = self.client.get(reverse("ops:schedule"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "目前没有计划中的发射")
+

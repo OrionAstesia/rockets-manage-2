@@ -9,11 +9,11 @@
 <body class="bg-body-tertiary">
 <nav class="navbar navbar-expand navbar-dark bg-dark">
   <div class="container">
-    <a class="navbar-brand" href="/">KSP 航天计划管理器</a>
+    <a class="navbar-brand" href="{% url 'core:home' %}">KSP 航天计划管理器</a>
     <ul class="navbar-nav me-auto">
       {# 导航只有这 3 个前台页面 + 后台（规格 §8.2）；前台无表单、无写操作 #}
-      <li class="nav-item"><a class="nav-link" href="/">首页</a></li>
-      <li class="nav-item"><a class="nav-link" href="/schedule/">发射日程</a></li>
+      <li class="nav-item"><a class="nav-link" href="{% url 'core:home' %}">首页</a></li>
+      <li class="nav-item"><a class="nav-link" href="{% url 'ops:schedule' %}">发射日程</a></li>
       <li class="nav-item"><a class="nav-link" href="/admin/">后台管理</a></li>
     </ul>
   </div>
