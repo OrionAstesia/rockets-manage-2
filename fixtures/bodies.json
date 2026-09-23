@@ -1,0 +1,62 @@
+[
+  {
+    "model": "core.body",
+    "pk": 1,
+    "fields": {
+      "name": "Kerbol",
+      "mu": 1.172332e18,
+      "radius": 261600000.0,
+      "has_atmosphere": false
+    }
+  },
+  {
+    "model": "core.body",
+    "pk": 2,
+    "fields": {
+      "name": "Kerbin",
+      "mu": 3.5316e12,
+      "radius": 600000.0,
+      "has_atmosphere": true
+    }
+  },
+  {
+    "model": "core.body",
+    "pk": 3,
+    "fields": {
+      "name": "Mun",
+      "mu": 6.513839e10,
+      "radius": 200000.0,
+      "has_atmosphere": false
+    }
+  },
+  {
+    "model": "core.body",
+    "pk": 4,
+    "fields": {
+      "name": "Minmus",
+      "mu": 1.7658e9,
+      "radius": 60000.0,
+      "has_atmosphere": false
+    }
+  },
+  {
+    "model": "core.body",
+    "pk": 5,
+    "fields": {
+      "name": "Duna",
+      "mu": 3.013632e11,
+      "radius": 320000.0,
+      "has_atmosphere": true
+    }
+  },
+  {
+    "model": "core.body",
+    "pk": 6,
+    "fields": {
+      "name": "Eve",
+      "mu": 8.17173e12,
+      "radius": 700000.0,
+      "has_atmosphere": true
+    }
+  }
+]

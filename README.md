@@ -35,12 +35,26 @@
 
 ## 仓库当前状态
 
-⚠️ **这个仓库目前只有文档，没有任何代码。** 已存在：`README.md`、`.gitignore`、`requirements.txt`、`docs/`。
+⚠️ **这个仓库目前只有文档、依赖清单和种子数据，没有代码。**
 
-`manage.py`、`config/`、五个 app、`fixtures/`、`templates/` **都还不存在**，需要按 [`docs/spec/00-最小系统.md`](docs/spec/00-最小系统.md) 从 S1 开始创建。所以下面的命令**在代码写出来之前会报错**，它们是目标状态、不是当前可用状态。
+**已存在**：
+
+```
+README.md              本文件
+.gitignore
+requirements.txt       唯一依赖 Django~=5.2.0
+fixtures/bodies.json   6 个天体的种子数据（规格 §5.1）
+docs/spec/00-最小系统.md   ★ 唯一权威源
+docs/README.md
+docs/archive/          设计过程存档，开发不需要读
+```
+
+**待创建**（按规格 §10 的 S1–S4 做）：`manage.py`、`config/`、5 个 app（`core` / `parts` / `fleet` / `spaceflight` / `ops`）、`templates/`、`services/orbital.py`。
+
+所以下面的命令**在代码写出来之前会报错**，它们是目标状态、不是当前可用状态。
 
 ```powershell
-# 0. 先按规格创建项目骨架（S1 步），已存在时跳过
+# 0. 先按规格 §10 的 S1 创建项目骨架
 django-admin startproject config .
 
 # 1. 创建环境（本机 PATH 上的 python 是 D:\MinGW\bin\python.exe，没有 Django，务必用 conda 环境）
@@ -48,7 +62,7 @@ conda create -n rocket python=3.10 -y
 conda activate rocket
 pip install -r requirements.txt
 
-# 2. 初始化数据库（fixtures/bodies.json 需按规格 §5.1 创建）
+# 2. 初始化数据库
 python manage.py makemigrations
 python manage.py migrate
 python manage.py loaddata fixtures/bodies.json
