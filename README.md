@@ -2,7 +2,7 @@
 
 《坎巴拉太空计划》(Kerbal Space Program) 玩家的**发射计划与任务记录管理工具**。
 
-> **状态**：设计阶段已完成（`docs/spec` 文档），**代码尚未开始**。开发时先阅读 `docs/spec/00-最小系统.md` 的起步。
+> **状态**：设计阶段已完成（`docs/spec/00-最小系统.md`），**v1 代码已按规格 §10 的 S1–S4 全部实现**（每步一个 commit，`manage.py test` 85 项全绿）。
 
 ---
 
@@ -28,54 +28,54 @@
 | 数据库 | **SQLite**（单文件 `db.sqlite3`，可直接拷贝备份） |
 | Python | **3.10**，conda 环境名 **`rocket`** |
 | 其他依赖 | **无**（不用 numpy、不用 DRF、不用 JS 库） |
-| 前端 | Django 模板 + Bootstrap 5 + 原生 JS（**无构建链**） |
+| 前端 | Django 模板 + Bootstrap 5（CDN），**零 JS 文件、零内联事件** |
 | 测试 | `manage.py test` |
 
 ---
 
 ## 仓库当前状态
 
-⚠️ **这个仓库目前只有文档、依赖清单和种子数据，没有代码。**
-
-**已存在**：
+✅ **v1 已实现完毕，可以跑了。**
 
 ```
-README.md              本文件
-.gitignore
-requirements.txt       唯一依赖 Django~=5.2.0
-fixtures/bodies.json   6 个天体的种子数据（规格 §5.1）
+manage.py
+config/                  settings（zh-hans / Asia-Shanghai / 根 templates）+ urls
+core/                    Body 模型、constants.py、首页视图、ProtectedDeleteMixin、测试
+parts/                   FuelTank / Engine / ScienceInstrument
+fleet/                   Rocket / RocketStage / Payload、/rockets/<pk>/ 详情页
+spaceflight/             Site / Spacecraft（clean() 校验）
+ops/                     Save / FlightLog、/schedule/ 日程页
+services/orbital.py      7 个纯计算函数（周期 / 拱点 / 高度 / 逐级 Δv）
+templates/               base.html + core/home.html + ops/schedule.html + fleet/rocket_detail.html
+fixtures/bodies.json     6 个天体的种子数据（规格 §5.1），已随仓库提供
 docs/spec/00-最小系统.md   ★ 唯一权威源
-docs/README.md
-docs/archive/          设计过程存档，开发不需要读
+README.md  requirements.txt  .gitignore
 ```
 
-**待创建**（按规格 §10 的 S1–S4 做）：`manage.py`、`config/`、5 个 app（`core` / `parts` / `fleet` / `spaceflight` / `ops`）、`templates/`、`services/orbital.py`。
-
-所以下面的命令**在代码写出来之前会报错**，它们是目标状态、不是当前可用状态。
+## 怎么跑
 
 ```powershell
-# 0. 先按规格 §10 的 S1 创建项目骨架
-django-admin startproject config .
-
-# 1. 创建环境
+# 1. 环境
 #    ★ 本机已就绪：conda 环境 rocket 已存在（F:\Anaconda\envs\rocket，Python 3.10.21 + Django 5.2.17），无需重建
 #    换机器时才需要下面三行：
 conda create -n rocket python=3.10 -y
 conda activate rocket
 pip install -r requirements.txt
 
-# 2. 初始化数据库
-python manage.py makemigrations
+# 2. 初始化数据库（已有 db.sqlite3 可跳过）
 python manage.py migrate
 python manage.py loaddata fixtures/bodies.json
-python manage.py createsuperuser
+python manage.py createsuperuser        # 写操作全在 Admin，所以必须有一个账号
 
-# 3. 运行
+# 3. 运行与自测
+python manage.py test                   # 85 项，应全绿
 python manage.py runserver 127.0.0.1:8000
 ```
 
-- 应用界面 <http://127.0.0.1:8000/>
-- 管理后台 <http://127.0.0.1:8000/admin/>
+- 应用界面 <http://127.0.0.1:8000/>（首页 / 发射日程 / 火箭详情，全部只读）
+- 管理后台 <http://127.0.0.1:8000/admin/>（**所有增删改都在这里**）
+
+> 第一次使用时：先在 Admin 建一个**存档**，再录引擎/燃料罐，然后录火箭（级在火箭表单里用内联加）、发射场，最后录发射日志。
 
 > ⚠️ **环境陷阱**：本机 PATH 上的 `python` 是 `D:\MinGW\bin\python.exe`（**无 Django**）。跑本项目**必须先 `conda activate rocket`**。另本机 `conda` 不在 PATH 中，可执行文件在 `F:\Anaconda\Scripts\conda.exe`——必要时用全路径或在 conda prompt 里操作。
 
@@ -101,13 +101,15 @@ python manage.py runserver 127.0.0.1:8000
 
 ---
 
-## 三个最容易出错的地方
+## 五个最容易出错的地方
 
-1. **`stage_order` 方向**：`1` = 最先点火的最下面一级（起飞级）；页面**降序**渲染（最上级在顶部），Δv **升序**累加（第 1 级的 `m₀` 要含上方所有级 + 载荷）。
+1. **`stage_order` 方向**：`1` = 最先点火的最下面一级（起飞级）；页面**降序**渲染（最上级在顶部），Δv **升序**累加（第 1 级的 `m₀` 要含上方所有级 + 载荷）。质量闭合要用 `vehicle_delta_v(...)[0]`（起飞级），不是 `[-1]`。
 2. **`sma` 不是高度**：高度 = `sma − Body.radius`（Kerbin 600 km）。混淆会产生 600 km 量级误差。
 3. **Δv 用 `G0 = 9.80665` 常数，不用所在天体的重力**：用当地重力在 Kerbin 上只差 0.03%（测不出来），在 Mun 上差 83%。防护办法是 `stage_delta_v()` 的签名里不出现任何重力参数。
+4. **存档外键叫 `program`，不能叫 `save`**：`save` 与 Django 的 `Model.save()` 同名，会遮蔽方法，让 `objects.create()` / Admin 保存直接抛 `TypeError: 'Save' object is not callable`（`manage.py check` 和 `makemigrations` 都查不出来）。
+5. **删存档要先清航天器与发射日志**：`FlightLog` 以 `PROTECT` 引用火箭/载荷/发射场，直接删存档会被 Django 拒绝。顺序写在 `ops.Save.delete()`，Admin 侧另有 `get_deleted_objects()` / `delete_queryset()` 配套。
 
-完整说明见 [`docs/spec/00-最小系统.md`](docs/spec/00-最小系统.md) §7。**注意：v1 里没有多态外键**（级直接挂火箭，航天计划用普通外键），所以「不用 `GenericForeignKey`」不再是本项目的注意事项。
+完整说明见 [`docs/spec/00-最小系统.md`](docs/spec/00-最小系统.md) §4.6 / §4.11 / §7。**注意：v1 里没有多态外键**（级直接挂火箭，火箭/载荷等用普通外键归属存档），所以「不用 `GenericForeignKey`」不再是本项目的注意事项。
 
 ---
 
