@@ -1,0 +1,3 @@
+# 唯一依赖：Django 5.2.x（Python 3.10）
+# 本项目不需要 numpy / pymysql / wtforms / passlib / DRF —— 见 docs/spec/00-最小系统.md §2
+Django~=5.2.0

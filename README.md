@@ -2,7 +2,7 @@
 
 《坎巴拉太空计划》(Kerbal Space Program) 玩家的**发射计划与任务记录管理工具**。
 
-> **状态**：设计阶段已完成（`docs/` 全套文档），**代码尚未开始**。开发从 `docs/08-任务清单.md` 的 **P0 地基** 起步。
+> **状态**：设计阶段已完成（`docs/spec` 文档），**代码尚未开始**。开发时先阅读 `docs/spec/00-最小系统.md` 的起步。
 
 ---
 
@@ -33,18 +33,25 @@
 
 ---
 
-## 快速开始
+## 仓库当前状态
+
+⚠️ **这个仓库目前只有文档，没有任何代码。** 已存在：`README.md`、`.gitignore`、`requirements.txt`、`docs/`。
+
+`manage.py`、`config/`、五个 app、`fixtures/`、`templates/` **都还不存在**，需要按 [`docs/spec/00-最小系统.md`](docs/spec/00-最小系统.md) 从 S1 开始创建。所以下面的命令**在代码写出来之前会报错**，它们是目标状态、不是当前可用状态。
 
 ```powershell
+# 0. 先按规格创建项目骨架（S1 步），已存在时跳过
+django-admin startproject config .
+
 # 1. 创建环境（本机 PATH 上的 python 是 D:\MinGW\bin\python.exe，没有 Django，务必用 conda 环境）
 conda create -n rocket python=3.10 -y
 conda activate rocket
 pip install -r requirements.txt
 
-# 2. 初始化数据库
+# 2. 初始化数据库（fixtures/bodies.json 需按规格 §5.1 创建）
 python manage.py makemigrations
 python manage.py migrate
-python manage.py loaddata fixtures/bodies.json fixtures/parts_sample.json
+python manage.py loaddata fixtures/bodies.json
 python manage.py createsuperuser
 
 # 3. 运行
