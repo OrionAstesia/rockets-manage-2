@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     # 本项目的 5 个 app（规格 §10）
     'core',
+    'parts',
 ]
 
 MIDDLEWARE = [
