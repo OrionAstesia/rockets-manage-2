@@ -16,7 +16,7 @@
 | 这枚火箭能不能把载荷送到目标轨道？ | **Δv 与推重比计算**（逐级累加） |
 | 我接下来该发射什么？ | **发射日程**（尚未执行的任务按计划时间排列） |
 | 我在轨有哪些资产？轨道和周期是多少？ | **在轨航天器**（轨道六要素 + 周期） |
-| 这一堆东西是为了哪个目标在忙？ | **航天计划**（1 个计划统辖 n 个火箭/载荷/发射/发射场/航天器） |
+| 这一堆东西是为了哪个存档在忙？ | **玩家存档**（1 个存档统辖 n 个火箭/载荷/发射/发射场/航天器） |
 
 ---
 
@@ -24,10 +24,10 @@
 
 | 项 | 选择 |
 |---|---|
-| 框架 | **Django 5.2**（Admin 覆盖 14 张表的 CRUD） |
+| 框架 | **Django 5.2**（Admin 覆盖 11 张表的 CRUD） |
 | 数据库 | **SQLite**（单文件 `db.sqlite3`，可直接拷贝备份） |
 | Python | **3.10**，conda 环境名 **`rocket`** |
-| 计算 | `numpy` |
+| 其他依赖 | **无**（不用 numpy、不用 DRF、不用 JS 库） |
 | 前端 | Django 模板 + Bootstrap 5 + 原生 JS（**无构建链**） |
 | 测试 | `manage.py test` |
 
@@ -57,7 +57,9 @@ docs/archive/          设计过程存档，开发不需要读
 # 0. 先按规格 §10 的 S1 创建项目骨架
 django-admin startproject config .
 
-# 1. 创建环境（本机 PATH 上的 python 是 D:\MinGW\bin\python.exe，没有 Django，务必用 conda 环境）
+# 1. 创建环境
+#    ★ 本机已就绪：conda 环境 rocket 已存在（F:\Anaconda\envs\rocket，Python 3.10.21 + Django 5.2.17），无需重建
+#    换机器时才需要下面三行：
 conda create -n rocket python=3.10 -y
 conda activate rocket
 pip install -r requirements.txt
@@ -111,9 +113,7 @@ python manage.py runserver 127.0.0.1:8000
 
 ## 遗留待裁决
 
-| 问题 | 位置 |
-|---|---|
-| **数据迁移路线 A/B/C**：本仓库是全新实现，**原型数据默认不迁移**（路线 A）。若日后想保留原型里那 5 枚含 KSP 级配置文本的火箭，走路线 C（只迁 `arock.sql` 的 17 行） | 基准 §11.4 ｜ `07` §8 |
+无。**数据迁移路线已定为 A**：本仓库是全新实现，原型数据不迁移（规格 §11 明确「数据迁移脚本」不做）。
 
 ---
 
