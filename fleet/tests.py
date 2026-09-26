@@ -14,7 +14,7 @@ from parts.models import Engine, FuelTank
 from services.orbital import stage_dry_mass, stage_fuel_mass, vehicle_delta_v
 from spaceflight.models import Site
 
-from .forms import PayloadForm, RocketForm
+from .forms import PayloadForm, RocketForm, StageForm
 from .models import Payload, Rocket, RocketStage
 
 
@@ -292,4 +292,97 @@ class ProgramScopedFormTests(TestCase):
             reverse("fleet:payload_delete", args=[payload.pk]), {"confirmed": "yes"},
         )
         self.assertFalse(Payload.objects.exists())
+
+
+class StageCrudTests(TestCase):
+    """改造文档 10 第 5.5 / 8.2 节：级的新增、编辑、删除与序号重复提示。"""
+
+    def setUp(self):
+        self.save = Save.objects.create(name="生涯存档")
+        self.rocket = Rocket.objects.create(name="测试火箭", program=self.save)
+        self.engine = Engine.objects.create(name="引擎", dry_mass=1.0, isp_asl=300, isp_vac=345)
+        self.tank = FuelTank.objects.create(name="燃料罐", dry_mass=0.5, capacity=800)
+
+    def stage_payload(self, order=1, **overrides):
+        data = {
+            "stage_order": str(order), "engine": self.engine.pk, "engine_count": "1",
+            "fuel_tank": self.tank.pk, "tank_count": "1", "structure_mass": "0.2",
+            "separation_type": "STACK", "note": "",
+        }
+        data.update(overrides)
+        return data
+
+    def test_create_stage_takes_rocket_from_url(self):
+        response = self.client.post(
+            f"{reverse('fleet:stage_create')}?rocket={self.rocket.pk}", self.stage_payload(1),
+        )
+        self.assertRedirects(response, reverse("fleet:rocket_detail", args=[self.rocket.pk]))
+        self.assertEqual(RocketStage.objects.get(rocket=self.rocket).stage_order, 1)
+
+    def test_create_stage_without_rocket_param_is_rejected(self):
+        response = self.client.post(reverse("fleet:stage_create"), self.stage_payload(1))
+        self.assertRedirects(response, reverse("core:home"))
+        self.assertFalse(RocketStage.objects.exists())
+
+    def test_form_suggests_next_stage_order(self):
+        RocketStage.objects.create(rocket=self.rocket, stage_order=1, structure_mass=0.1)
+        RocketStage.objects.create(rocket=self.rocket, stage_order=2, structure_mass=0.1)
+        self.assertEqual(StageForm(rocket=self.rocket).initial["stage_order"], 3)
+
+    def test_first_stage_suggestion_starts_at_one(self):
+        self.assertEqual(StageForm(rocket=self.rocket).initial["stage_order"], 1)
+
+    def test_duplicate_stage_order_shows_chinese_error(self):
+        """重复序号要给中文提示，而不是 IntegrityError 500。"""
+        RocketStage.objects.create(rocket=self.rocket, stage_order=1, structure_mass=0.1)
+        response = self.client.post(
+            f"{reverse('fleet:stage_create')}?rocket={self.rocket.pk}", self.stage_payload(1),
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "这枚火箭已经有第 1 级了")
+        self.assertEqual(RocketStage.objects.count(), 1)
+
+    def test_update_stage(self):
+        stage = RocketStage.objects.create(rocket=self.rocket, stage_order=1, structure_mass=0.1)
+        response = self.client.post(
+            reverse("fleet:stage_update", args=[stage.pk]), self.stage_payload(2),
+        )
+        self.assertRedirects(response, reverse("fleet:rocket_detail", args=[self.rocket.pk]))
+        stage.refresh_from_db()
+        self.assertEqual(stage.stage_order, 2)
+
+    def test_update_stage_keeping_its_own_order_is_allowed(self):
+        """唯一性校验必须排除自身，否则原样保存就会报错。"""
+        stage = RocketStage.objects.create(rocket=self.rocket, stage_order=1, structure_mass=0.1)
+        response = self.client.post(
+            reverse("fleet:stage_update", args=[stage.pk]), self.stage_payload(1),
+        )
+        self.assertRedirects(response, reverse("fleet:rocket_detail", args=[self.rocket.pk]))
+
+    def test_delete_stage(self):
+        stage = RocketStage.objects.create(rocket=self.rocket, stage_order=1, structure_mass=0.1)
+        response = self.client.post(
+            reverse("fleet:stage_delete", args=[stage.pk]), {"confirmed": "yes"},
+        )
+        self.assertRedirects(response, reverse("fleet:rocket_detail", args=[self.rocket.pk]))
+        self.assertFalse(RocketStage.objects.exists())
+
+    def test_detail_page_has_stage_entries(self):
+        stage = RocketStage.objects.create(rocket=self.rocket, stage_order=1, structure_mass=0.1)
+        response = self.client.get(reverse("fleet:rocket_detail", args=[self.rocket.pk]))
+        self.assertContains(response, f"{reverse('fleet:stage_create')}?rocket={self.rocket.pk}")
+        self.assertContains(response, reverse("fleet:stage_update", args=[stage.pk]))
+        self.assertContains(response, reverse("fleet:stage_delete", args=[stage.pk]))
+
+
+class RocketDetailProgramTests(TestCase):
+    """文档 10 第 4.3 / 8.2 节：修掉「所属存档」永远空白，并用测试卡住。"""
+
+    def test_detail_page_shows_program_name_and_no_blank(self):
+        save = Save.objects.create(name="我的生涯存档")
+        rocket = Rocket.objects.create(name="火箭", program=save)
+        response = self.client.get(reverse("fleet:rocket_detail", args=[rocket.pk]))
+        self.assertContains(response, "我的生涯存档")   # 曾经写成 {{ rocket.save }}，永远是空白
+        self.assertNotContains(response, "None")
+
 

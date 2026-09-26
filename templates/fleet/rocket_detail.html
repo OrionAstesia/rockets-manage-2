@@ -45,7 +45,10 @@
   ℹ 本页自上而下显示，底部为第 1 级（最先点火的起飞级）。Δv 从第 1 级起向上累加。
 </div>
 
-<h2 class="h5">级序与 Δv</h2>
+<div class="d-flex justify-content-between align-items-center">
+  <h2 class="h5 mb-0">级序与 Δv</h2>
+  <a class="btn btn-sm btn-primary" href="{% url 'fleet:stage_create' %}?rocket={{ rocket.pk }}">+ 新增一级</a>
+</div>
 <div class="table-responsive">
   <table class="table table-sm table-striped align-middle">
     <thead class="table-light">
@@ -59,6 +62,7 @@
         <th class="text-end">m_f (t)</th>
         <th class="text-end">Δv (m/s)</th>
         <th class="text-end">累计 Δv (m/s)</th>
+        <th class="text-end">操作</th>
       </tr>
     </thead>
     <tbody>
@@ -81,17 +85,24 @@
         <td class="text-end">{{ row.mf|floatformat:2 }}</td>
         <td class="text-end">{{ row.delta_v|floatformat:0|default:"—" }}</td>
         <td class="text-end">{{ row.cumulative|floatformat:0|default:"—" }}</td>
+        <td class="text-end text-nowrap">
+          <a class="btn btn-sm btn-outline-secondary" href="{% url 'fleet:stage_update' row.stage.pk %}">编辑</a>
+          <form class="d-inline" method="post" action="{% url 'fleet:stage_delete' row.stage.pk %}">
+            {% csrf_token %}<button type="submit" class="btn btn-sm btn-outline-danger">删除</button>
+          </form>
+        </td>
       </tr>
       {% empty %}
       <tr>
-        <td colspan="9" class="text-muted">这枚火箭还没有配置级。</td>
+        <td colspan="10" class="text-muted">这枚火箭还没有配置级。点右上角「+ 新增一级」添加。</td>
       </tr>
       {% endfor %}
     </tbody>
     <tfoot>
       <tr class="table-light">
-        <th colspan="8" class="text-end">总 Δv</th>
+        <th colspan="9" class="text-end">总 Δv</th>
         <th class="text-end">{{ total_dv|floatformat:0 }} m/s</th>
+        <th></th>
       </tr>
     </tfoot>
   </table>
