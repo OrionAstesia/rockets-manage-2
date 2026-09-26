@@ -46,6 +46,9 @@ class ProgramScopedFormMixin:
         self.fields.pop("program", None)          # 不显示、也不接受用户提交
         if program is not None:
             self.instance.program = program       # 新建时由视图传入
+        # 供子类按存档过滤外键下拉。注意用 getattr：未保存且未设 program 的实例上
+        # 访问 instance.program 会抛 RelatedObjectDoesNotExist（它继承 AttributeError，所以 getattr 安全）
+        self.program = getattr(self.instance, "program", None)
 
 
 class SaveForm(BaseModelForm):

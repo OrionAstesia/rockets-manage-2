@@ -9,10 +9,12 @@ from django.urls import reverse
 
 from core.constants import G0
 from core.models import Body
-from ops.models import Save
+from ops.models import FlightLog, Save
 from parts.models import Engine, FuelTank
 from services.orbital import stage_dry_mass, stage_fuel_mass, vehicle_delta_v
+from spaceflight.models import Site
 
+from .forms import PayloadForm, RocketForm
 from .models import Payload, Rocket, RocketStage
 
 
@@ -187,3 +189,107 @@ class RocketDetailViewTests(ThreeStageRocketMixin, TestCase):
         response = self.client.get(reverse("fleet:rocket_detail", args=[self.rocket.pk]))
         self.assertContains(response, f"{sum(r['delta_v'] for r in rows):.0f}")
         self.assertContains(response, "不含载荷质量")
+
+
+class ProgramScopedFormTests(TestCase):
+    """改造文档 10 第 8.2 节：program 不进表单、从 URL 注入、缺失要被拦下。"""
+
+    def setUp(self):
+        self.save = Save.objects.create(name="生涯存档")
+
+    def test_forms_do_not_expose_program(self):
+        self.assertNotIn("program", RocketForm().fields)
+        self.assertNotIn("program", PayloadForm().fields)
+
+    def test_create_rocket_with_save_param(self):
+        response = self.client.post(
+            f"{reverse('fleet:rocket_create')}?save={self.save.pk}",
+            {
+                "name": "新火箭", "series": "K", "manufacturer": "", "diameter": "1.25",
+                "first_flight_date": "", "crew_capacity": "0", "cost": "100", "note": "",
+            },
+        )
+        self.assertRedirects(response, reverse("ops:workspace", args=[self.save.pk]))
+        rocket = Rocket.objects.get(name="新火箭")
+        self.assertEqual(rocket.program_id, self.save.pk)
+
+    def test_create_without_save_param_is_rejected(self):
+        response = self.client.post(reverse("fleet:rocket_create"), {"name": "不该被创建"})
+        self.assertRedirects(response, reverse("core:home"))
+        self.assertFalse(Rocket.objects.exists())
+
+    def test_create_with_bogus_save_param_is_rejected(self):
+        response = self.client.post(
+            f"{reverse('fleet:rocket_create')}?save=abc", {"name": "不该被创建"}
+        )
+        self.assertRedirects(response, reverse("core:home"))
+        self.assertFalse(Rocket.objects.exists())
+
+    def test_update_cannot_move_object_to_another_program(self):
+        """program 从实例取：即使提交里塞了别的存档，也改不走。"""
+        rocket = Rocket.objects.create(name="火箭", program=self.save)
+        other = Save.objects.create(name="另一个存档")
+        response = self.client.post(
+            reverse("fleet:rocket_update", args=[rocket.pk]),
+            {
+                "name": "改名了", "series": "", "manufacturer": "", "diameter": "",
+                "first_flight_date": "", "crew_capacity": "0", "cost": "0", "note": "",
+                "program": other.pk,
+            },
+        )
+        self.assertEqual(response.status_code, 302)
+        rocket.refresh_from_db()
+        self.assertEqual(rocket.name, "改名了")
+        self.assertEqual(rocket.program_id, self.save.pk)
+
+    def test_model_save_method_still_works(self):
+        """program 命名铁律的守卫：objects.create 与 instance.save() 都不能抛 TypeError。"""
+        rocket = Rocket.objects.create(name="回归用火箭", program=self.save)
+        rocket.series = "改一下"
+        rocket.save()
+        self.assertEqual(Rocket.objects.get(pk=rocket.pk).series, "改一下")
+
+    def test_delete_rocket_redirects_to_workspace(self):
+        rocket = Rocket.objects.create(name="要删的火箭", program=self.save)
+        response = self.client.post(
+            reverse("fleet:rocket_delete", args=[rocket.pk]), {"confirmed": "yes"},
+        )
+        self.assertRedirects(response, reverse("ops:workspace", args=[self.save.pk]))
+        self.assertFalse(Rocket.objects.filter(pk=rocket.pk).exists())
+
+    def test_delete_rocket_blocked_when_it_has_flights(self):
+        """被 FlightLog 以 PROTECT 引用的火箭：友好提示，不是 500。"""
+        body = Body.objects.create(name="Kerbin", mu=3.5316e12, radius=600000)
+        rocket = Rocket.objects.create(name="有任务的火箭", program=self.save)
+        site = Site.objects.create(name="发射场", program=self.save, body=body)
+        FlightLog.objects.create(name="任务", rocket=rocket, site=site, program=self.save)
+        response = self.client.post(
+            reverse("fleet:rocket_delete", args=[rocket.pk]), {"confirmed": "yes"}, follow=True,
+        )
+        self.assertTrue(Rocket.objects.filter(pk=rocket.pk).exists())
+        self.assertContains(response, "删除失败")
+
+    def test_delete_confirm_page_mentions_stage_count(self):
+        rocket = Rocket.objects.create(name="三级火箭", program=self.save)
+        for order in (1, 2, 3):
+            RocketStage.objects.create(rocket=rocket, stage_order=order, structure_mass=0.1)
+        response = self.client.get(reverse("fleet:rocket_delete", args=[rocket.pk]))
+        self.assertContains(response, "这枚火箭的 3 级将一并删除")
+
+    def test_payload_crud(self):
+        response = self.client.post(
+            f"{reverse('fleet:payload_create')}?save={self.save.pk}",
+            {
+                "name": "新载荷", "payload_type": "PROBE", "mass": "0.5", "diameter": "",
+                "crew_capacity": "0", "cost": "0", "note": "",
+            },
+        )
+        self.assertRedirects(response, reverse("ops:workspace", args=[self.save.pk]))
+        payload = Payload.objects.get(name="新载荷")
+        self.assertEqual(payload.program_id, self.save.pk)
+
+        response = self.client.post(
+            reverse("fleet:payload_delete", args=[payload.pk]), {"confirmed": "yes"},
+        )
+        self.assertFalse(Payload.objects.exists())
+

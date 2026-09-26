@@ -1,12 +1,17 @@
+"""火箭详情与火箭/载荷的增删改（改造文档 10 第 4.3 节）。"""
+
+from django.urls import reverse
 from django.views.generic import DetailView
 
+from core.views import ScopedCreateView, ScopedDeleteView, ScopedUpdateView
 from services.orbital import vehicle_delta_v
 
-from .models import Rocket
+from .forms import PayloadForm, RocketForm
+from .models import Payload, Rocket
 
 
 class RocketDetailView(DetailView):
-    """火箭详情（规格 §8.2）：级序列表（降序渲染）+ 逐级 Δv + 总 Δv。"""
+    """火箭详情：级序列表（降序渲染）+ 逐级 Δv + 总 Δv。"""
 
     model = Rocket
     template_name = "fleet/rocket_detail.html"
@@ -23,3 +28,39 @@ class RocketDetailView(DetailView):
         for row, stage in zip(ctx["stage_rows"], stages):
             row["stage"] = stage
         return ctx
+
+
+class RocketCreateView(ScopedCreateView):
+    model = Rocket
+    form_class = RocketForm
+
+
+class RocketUpdateView(ScopedUpdateView):
+    model = Rocket
+    form_class = RocketForm
+
+    def get_source_url(self):
+        return reverse("fleet:rocket_detail", args=[self.object.pk])
+
+
+class RocketDeleteView(ScopedDeleteView):
+    model = Rocket
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["extra_warning"] = f"这枚火箭的 {self.object.stages.count()} 级将一并删除。"
+        return ctx
+
+
+class PayloadCreateView(ScopedCreateView):
+    model = Payload
+    form_class = PayloadForm
+
+
+class PayloadUpdateView(ScopedUpdateView):
+    model = Payload
+    form_class = PayloadForm
+
+
+class PayloadDeleteView(ScopedDeleteView):
+    model = Payload

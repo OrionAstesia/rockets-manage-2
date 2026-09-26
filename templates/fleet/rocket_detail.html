@@ -4,16 +4,25 @@
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-end mb-3">
-  <h1 class="h4 mb-0">{{ rocket.name }}</h1>
-  <a class="btn btn-sm btn-outline-secondary" href="/admin/fleet/rocket/{{ rocket.pk }}/change/">
-    在后台编辑
-  </a>
+  <div>
+    <h1 class="h4 mb-0">{{ rocket.name }}</h1>
+    <div class="text-muted small">
+      所属存档：<a href="{% url 'ops:workspace' rocket.program_id %}">{{ rocket.program }}</a>
+    </div>
+  </div>
+  <div class="text-nowrap">
+    <a class="btn btn-sm btn-outline-secondary" href="{% url 'fleet:rocket_update' rocket.pk %}">编辑火箭</a>
+    <form class="d-inline" method="post" action="{% url 'fleet:rocket_delete' rocket.pk %}">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-sm btn-outline-danger">删除火箭</button>
+    </form>
+  </div>
 </div>
 
 <div class="card mb-4">
   <div class="card-body">
     <dl class="row mb-0 small">
-      <dt class="col-sm-2">所属存档</dt><dd class="col-sm-4">{{ rocket.save }}</dd>
+      <dt class="col-sm-2">所属存档</dt><dd class="col-sm-4">{{ rocket.program }}</dd>
       <dt class="col-sm-2">系列</dt><dd class="col-sm-4">{{ rocket.series|default:"—" }}</dd>
 
       <dt class="col-sm-2">制造商</dt><dd class="col-sm-4">{{ rocket.manufacturer|default:"—" }}</dd>
@@ -24,6 +33,7 @@
       <dd class="col-sm-4">{{ rocket.first_flight_date|default_if_none:"—" }}</dd>
       <dt class="col-sm-2">乘员容量</dt><dd class="col-sm-4">{{ rocket.crew_capacity }}</dd>
 
+      <dt class="col-sm-2">造价 (√)</dt><dd class="col-sm-4">{{ rocket.cost }}</dd>
       <dt class="col-sm-2">可回收复用</dt>
       <dd class="col-sm-4">{{ rocket.is_reusable|yesno:"是,否" }}</dd>
       <dt class="col-sm-2">备注</dt><dd class="col-sm-4">{{ rocket.note|default:"—" }}</dd>
@@ -74,9 +84,7 @@
       </tr>
       {% empty %}
       <tr>
-        <td colspan="9" class="text-muted">
-          这枚火箭还没有配置级。请到后台的「运载火箭」里用级内联（TabularInline）添加。
-        </td>
+        <td colspan="9" class="text-muted">这枚火箭还没有配置级。</td>
       </tr>
       {% endfor %}
     </tbody>

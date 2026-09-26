@@ -39,7 +39,7 @@
 </div>
 {% else %}
 <div class="alert alert-secondary">
-  目前没有计划中的发射。到<a href="/admin/ops/flightlog/add/">后台新增一条发射日志</a>，
+  目前没有计划中的发射。到某个<a href="{% url 'core:home' %}">存档工作台</a>里新增一条发射日志，
   状态选「计划中」并填上计划发射日期，它就会出现在这里。
 </div>
 {% endif %}
