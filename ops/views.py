@@ -1,14 +1,21 @@
-"""存档工作台、发射日程与发射日志的增删改（改造文档 10 第 4.2 节）。
+"""存档各集合的列表页、发射日程与发射日志的增删改（文档 11 第 4.1 节）。
 
-工作台是改造后的核心页：`program=这个存档` 的五个集合各一个只读表格 + 新增入口。
+每个集合**独立成页**：一页只显示一张表，二级导航在 `templates/ops/save_base.html` 里。
 """
 
 from django.db.models import Count, F
 from django.urls import reverse
 from django.views.generic import DetailView, ListView
 
-from core.views import ScopedCreateView, ScopedDeleteView, ScopedUpdateView
+from core.views import (
+    SaveScopedListView,
+    ScopedCreateView,
+    ScopedDeleteView,
+    ScopedUpdateView,
+)
+from fleet.models import Payload, Rocket
 from services.orbital import orbital_period
+from spaceflight.models import Site, Spacecraft
 
 from .forms import FlightLogForm
 from .models import FlightLog, FlightState, Save
@@ -59,6 +66,52 @@ class WorkspaceView(DetailView):
             for flight in save.flights.select_related("rocket", "site")
         ]
         return ctx
+
+
+class SaveRocketsView(SaveScopedListView):
+    model = Rocket
+    template_name = "ops/save_rockets.html"
+    context_object_name = "rockets"
+    select_related = ()
+
+    def get_queryset(self):
+        # 「级数」列：一次 annotate，避免每行再来一次 count 查询
+        return super().get_queryset().annotate(stage_total=Count("stages"))
+
+
+class SavePayloadsView(SaveScopedListView):
+    model = Payload
+    template_name = "ops/save_payloads.html"
+    context_object_name = "payloads"
+
+
+class SaveSitesView(SaveScopedListView):
+    model = Site
+    template_name = "ops/save_sites.html"
+    context_object_name = "sites"
+    select_related = ("body",)
+
+
+class SaveSpacecraftView(SaveScopedListView):
+    model = Spacecraft
+    template_name = "ops/save_spacecraft.html"
+    context_object_name = "spacecraft_rows"
+    select_related = ("body",)
+
+    def get_queryset(self):
+        # 周期实时算、不落库，所以返回带 period 的字典列表（**不要**给这个视图设 paginate_by）
+        return [{"obj": sc, "period": period_text(sc)} for sc in super().get_queryset()]
+
+
+class SaveFlightsView(SaveScopedListView):
+    model = FlightLog
+    template_name = "ops/save_flights.html"
+    context_object_name = "flight_rows"
+    select_related = ("rocket", "site")
+
+    def get_queryset(self):
+        # 同上：返回字典列表，不要设 paginate_by
+        return [{"obj": flight, "result": result_text(flight)} for flight in super().get_queryset()]
 
 
 class ScheduleView(ListView):

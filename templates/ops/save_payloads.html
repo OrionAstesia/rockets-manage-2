@@ -1,0 +1,53 @@
+{% extends "ops/save_base.html" %}
+
+{% block title %}{{ save.name }} · 载荷{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-end mb-3">
+  <div>
+    <h1 class="h4 mb-0">{{ save.name }}</h1>
+    <div class="text-muted small">{{ save.get_game_mode_display }} · 开始日期 {{ save.start_date|default_if_none:"—" }}</div>
+  </div>
+  <div class="text-nowrap">
+    <a class="btn btn-sm btn-outline-secondary" href="{% url 'core:save_update' save.pk %}">编辑存档</a>
+    <form class="d-inline" method="post" action="{% url 'core:save_delete' save.pk %}">
+      {% csrf_token %}<button type="submit" class="btn btn-sm btn-outline-danger">删除存档</button>
+    </form>
+  </div>
+</div>
+
+<div class="d-flex justify-content-between align-items-center mb-2">
+  <span class="text-muted small">共 {{ payloads|length }} 个载荷</span>
+  <a class="btn btn-sm btn-primary" href="{% url 'fleet:payload_create' %}?save={{ save.pk }}">+ 新增</a>
+</div>
+<div class="table-responsive">
+  <table class="table table-sm table-striped align-middle">
+    <thead class="table-light">
+      <tr>
+        <th>名称</th><th>类型</th>
+        <th class="text-end">质量 (t)</th>
+        <th class="text-end">乘员容量</th>
+        <th class="text-end">操作</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for payload in payloads %}
+      <tr>
+        <td>{{ payload.name }}</td>
+        <td>{{ payload.get_payload_type_display }}</td>
+        <td class="text-end">{{ payload.mass }}</td>
+        <td class="text-end">{{ payload.crew_capacity }}</td>
+        <td class="text-end text-nowrap">
+          <a class="btn btn-sm btn-outline-secondary" href="{% url 'fleet:payload_update' payload.pk %}">编辑</a>
+          <form class="d-inline" method="post" action="{% url 'fleet:payload_delete' payload.pk %}">
+            {% csrf_token %}<button type="submit" class="btn btn-sm btn-outline-danger">删除</button>
+          </form>
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="5" class="text-muted">这个存档还没有载荷。点右上角「+ 新增」添加一个。</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

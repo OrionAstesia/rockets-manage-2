@@ -15,9 +15,9 @@
 
 from django.contrib import messages
 from django.db.models import Count, ProtectedError
-from django.shortcuts import redirect
+from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse
-from django.views.generic import CreateView, DeleteView, TemplateView, UpdateView
+from django.views.generic import CreateView, DeleteView, ListView, TemplateView, UpdateView
 
 from ops.models import FlightLog, Save
 from spaceflight.models import CraftType, Spacecraft
@@ -140,6 +140,31 @@ class ScopedDeleteView(SafeDeleteMixin, DeleteView):
 
     def get_source_url(self):
         return reverse("ops:workspace", args=[self.object.program_id])
+
+
+class SaveScopedListView(ListView):
+    """存档下的一个集合列表（`/saves/<pk>/<slug>/`，文档 11 第 4.1 节）。
+
+    子类给 `model`、`template_name`、`context_object_name`，可选的 `select_related`。
+
+    ⚠️ 过滤字段是 `program`（绝不能写成 `save`，那会遮蔽 `Model.save()`）。
+    """
+
+    select_related = ()
+    save = None
+
+    def dispatch(self, request, *args, **kwargs):
+        self.save = get_object_or_404(Save, pk=kwargs["pk"])
+        return super().dispatch(request, *args, **kwargs)
+
+    def get_queryset(self):
+        qs = self.model.objects.filter(program=self.save)
+        return qs.select_related(*self.select_related) if self.select_related else qs
+
+    def get_context_data(self, **kwargs):
+        ctx = super().get_context_data(**kwargs)
+        ctx["save"] = self.save
+        return ctx
 
 
 class HomeView(TemplateView):
