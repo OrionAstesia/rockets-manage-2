@@ -66,8 +66,8 @@ class ScopedCreateView(FormPageMixin, CreateView):
         save_id = request.GET.get("save", "")
         self.program = Save.objects.filter(pk=save_id).first() if save_id.isdigit() else None
         if self.program is None:
-            messages.error(request, "请先进入某个存档的工作台，再点「+ 新增」。")
-            return redirect("core:home")
+            messages.error(request, "请先从「存档」里进入某个存档，再点「+ 新增」。")
+            return redirect("core:save_list")
         return super().dispatch(request, *args, **kwargs)
 
     def get_form_kwargs(self):
@@ -143,7 +143,20 @@ class ScopedDeleteView(SafeDeleteMixin, DeleteView):
 
 
 class HomeView(TemplateView):
-    """首页 = 存档列表 + 行内新建存档表单 + 全局统计 + 近期发射（文档 10 第 4.1 节）。"""
+    """主页 `/`：**暂空**，等后续开发补充（文档 11 第 2.1 节）。
+
+    不要顺手把统计 / 近期发射之类的块搬进来 —— 那些块留在存档列表 `/saves/` 里，
+    主页放什么等后续设计。
+    """
+
+    template_name = "core/home.html"
+
+
+class SaveListView(TemplateView):
+    """存档列表 `/saves/`：行内新建存档表单 + 存档表 + 全局统计 + 近期发射。
+
+    内容原来在 `/` 上（文档 11 第 4.3 节要求把存档列表搬到 `/saves/`）。
+    """
 
     template_name = "core/save_list.html"
 
@@ -180,13 +193,13 @@ class HomeView(TemplateView):
 
 
 class SaveCreateView(FormPageMixin, CreateView):
-    """新建存档。首页的行内表单也 POST 到这里。"""
+    """新建存档。存档列表 `/saves/` 上的行内表单也 POST 到这里。"""
 
     model = Save
     form_class = SaveForm
 
     def get_source_url(self):
-        return reverse("core:home")
+        return reverse("core:save_list")
 
     def get_success_url(self):
         messages.success(self.request, f"已新增存档：{self.object}")
@@ -200,7 +213,7 @@ class SaveUpdateView(FormPageMixin, UpdateView):
     form_class = SaveForm
 
     def get_source_url(self):
-        return reverse("core:home")
+        return reverse("core:save_list")
 
     def get_success_url(self):
         messages.success(self.request, "已保存。")
@@ -213,7 +226,7 @@ class SaveDeleteView(SafeDeleteMixin, DeleteView):
     model = Save
 
     def get_source_url(self):
-        return reverse("core:home")
+        return reverse("core:save_list")
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)

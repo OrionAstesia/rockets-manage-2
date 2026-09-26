@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+
+{% block title %}主页 · KSP 存档管理器{% endblock %}
+
+{% block content %}
+<h1 class="h4 mb-3">主页建设中</h1>
+<p class="text-muted mb-0">
+  这个位置留给以后的主页功能。现在请用左侧导航进入
+  <a href="{% url 'core:save_list' %}">存档</a> /
+  <a href="{% url 'parts:reference' %}">参考数据</a> /
+  <a href="{% url 'ops:schedule' %}">发射日程</a>。
+</p>
+{% endblock %}

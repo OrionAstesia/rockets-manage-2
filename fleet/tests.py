@@ -215,14 +215,14 @@ class ProgramScopedFormTests(TestCase):
 
     def test_create_without_save_param_is_rejected(self):
         response = self.client.post(reverse("fleet:rocket_create"), {"name": "不该被创建"})
-        self.assertRedirects(response, reverse("core:home"))
+        self.assertRedirects(response, reverse("core:save_list"))
         self.assertFalse(Rocket.objects.exists())
 
     def test_create_with_bogus_save_param_is_rejected(self):
         response = self.client.post(
             f"{reverse('fleet:rocket_create')}?save=abc", {"name": "不该被创建"}
         )
-        self.assertRedirects(response, reverse("core:home"))
+        self.assertRedirects(response, reverse("core:save_list"))
         self.assertFalse(Rocket.objects.exists())
 
     def test_update_cannot_move_object_to_another_program(self):
@@ -321,7 +321,7 @@ class StageCrudTests(TestCase):
 
     def test_create_stage_without_rocket_param_is_rejected(self):
         response = self.client.post(reverse("fleet:stage_create"), self.stage_payload(1))
-        self.assertRedirects(response, reverse("core:home"))
+        self.assertRedirects(response, reverse("core:save_list"))
         self.assertFalse(RocketStage.objects.exists())
 
     def test_form_suggests_next_stage_order(self):

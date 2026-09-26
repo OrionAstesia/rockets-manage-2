@@ -120,7 +120,7 @@ class SpaceflightCrudTests(TestCase):
     def test_missing_save_param_is_rejected(self):
         for url in (reverse("spaceflight:site_create"), reverse("spaceflight:spacecraft_create")):
             response = self.client.post(url, {"name": "不该被创建"})
-            self.assertRedirects(response, reverse("core:home"))
+            self.assertRedirects(response, reverse("core:save_list"))
         self.assertFalse(Site.objects.exists())
         self.assertFalse(Spacecraft.objects.exists())
 

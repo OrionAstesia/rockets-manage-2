@@ -103,8 +103,11 @@ class DeltaVSignatureTests(unittest.TestCase):
         self.assertEqual(params, ["stage", "upper_mass"])
 
 
-class HomePageTests(TestCase):
-    """规格 §8.2：首页 = 近期发射 5 条（降序）+ 在役航天器按类型计数 + 存档列表。"""
+class SaveListPageTests(TestCase):
+    """存档列表 `/saves/`：行内新建表单 + 存档表 + 在役航天器计数 + 近期发射 5 条。
+
+    这些断言原来测的是 `/`（文档 11 第 2.1 节把存档列表搬到了 `/saves/`）。
+    """
 
     def setUp(self):
         self.save = Save.objects.create(
@@ -142,11 +145,11 @@ class HomePageTests(TestCase):
         )
 
     def test_page_renders(self):
-        response = self.client.get(reverse("core:home"))
+        response = self.client.get(reverse("core:save_list"))
         self.assertEqual(response.status_code, 200)
 
     def test_only_five_most_recent_flights(self):
-        response = self.client.get(reverse("core:home"))
+        response = self.client.get(reverse("core:save_list"))
         names = [f.name for f in response.context["recent_flights"]]
         self.assertEqual(names, ["任务 7 号", "任务 6 号", "任务 5 号", "任务 4 号", "任务 3 号"])
         self.assertContains(response, "任务 7 号")
@@ -157,12 +160,12 @@ class HomePageTests(TestCase):
             name="日期未定任务", planned_date=None,
             rocket=self.rocket, site=self.site, program=self.save,
         )
-        response = self.client.get(reverse("core:home"))
+        response = self.client.get(reverse("core:save_list"))
         names = [f.name for f in response.context["recent_flights"]]
         self.assertNotIn("日期未定任务", names)
 
     def test_active_spacecraft_counted_by_craft_type(self):
-        response = self.client.get(reverse("core:home"))
+        response = self.client.get(reverse("core:save_list"))
         counts = response.context["spacecraft_counts"]
         self.assertEqual(counts["total"], 3)          # 退役的探测车不计入
         self.assertEqual(
@@ -173,27 +176,27 @@ class HomePageTests(TestCase):
         self.assertNotContains(response, "探测车 1")
 
     def test_saves_are_listed(self):
-        response = self.client.get(reverse("core:home"))
+        response = self.client.get(reverse("core:save_list"))
         self.assertContains(response, "生涯存档")
         self.assertContains(response, "生涯模式")
         self.assertContains(response, "2026年1月1日")   # zh-hans 本地化日期
 
-    def test_save_row_shows_counts_and_links_to_workspace(self):
-        response = self.client.get(reverse("core:home"))
+    def test_save_row_shows_counts_and_links_to_the_save(self):
+        response = self.client.get(reverse("core:save_list"))
         self.assertContains(response, f"/saves/{self.save.pk}/")
         row = next(r for r in response.context["save_rows"] if r.pk == self.save.pk)
         self.assertEqual(row.rocket_total, 1)
         self.assertEqual(row.flight_total, 7)          # 两个 Count 都加了 distinct，不会被乘积放大
 
-    def test_home_has_inline_create_form(self):
-        response = self.client.get(reverse("core:home"))
+    def test_save_list_has_inline_create_form(self):
+        response = self.client.get(reverse("core:save_list"))
         self.assertContains(response, 'action="/saves/new/"')
 
     def test_empty_state(self):
         FlightLog.objects.all().delete()
         Save.objects.all().delete()
         Spacecraft.objects.all().delete()
-        response = self.client.get(reverse("core:home"))
+        response = self.client.get(reverse("core:save_list"))
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "还没有任何发射记录或计划")
         self.assertContains(response, "没有在役航天器")
@@ -214,7 +217,7 @@ class SaveCrudTests(TestCase):
             reverse("core:save_create"),
             {"name": "新存档", "start_date": "2026-02-02", "game_mode": GameMode.SANDBOX},
         )
-        self.assertRedirects(response, reverse("core:home"))
+        self.assertRedirects(response, reverse("core:save_list"))
         save = Save.objects.get(name="新存档")
         self.assertEqual(save.game_mode, GameMode.SANDBOX)
         self.assertEqual(save.start_date, date(2026, 2, 2))
@@ -224,7 +227,7 @@ class SaveCrudTests(TestCase):
             reverse("core:save_update", args=[self.save.pk]),
             {"name": "改名了", "start_date": "", "game_mode": GameMode.SCIENCE},
         )
-        self.assertRedirects(response, reverse("core:home"))
+        self.assertRedirects(response, reverse("core:save_list"))
         self.save.refresh_from_db()
         self.assertEqual(self.save.name, "改名了")
         self.assertEqual(self.save.game_mode, GameMode.SCIENCE)
@@ -251,7 +254,7 @@ class SaveCrudTests(TestCase):
         response = self.client.post(
             reverse("core:save_delete", args=[self.save.pk]), {"confirmed": "yes"},
         )
-        self.assertRedirects(response, reverse("core:home"))
+        self.assertRedirects(response, reverse("core:save_list"))
         self.assertFalse(Save.objects.exists())
         self.assertFalse(Rocket.objects.exists())
         self.assertFalse(Site.objects.exists())

@@ -85,7 +85,7 @@ class StageCreateView(FormPageMixin, CreateView):
         self.rocket = Rocket.objects.filter(pk=rocket_id).first() if rocket_id.isdigit() else None
         if self.rocket is None:
             messages.error(request, "请先从火箭详情页点「+ 新增一级」。")
-            return redirect("core:home")
+            return redirect("core:save_list")
         return super().dispatch(request, *args, **kwargs)
 
     def get_form_kwargs(self):

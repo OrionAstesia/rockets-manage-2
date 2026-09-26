@@ -278,7 +278,7 @@ class WorkspaceTests(TestCase):
     def test_no_admin_entry_anywhere(self):
         """文档 10 第 8.1 节：页面里没有「在后台编辑」按钮，导航里没有后台入口。"""
         for url in (
-            reverse("core:home"),
+            reverse("core:save_list"),
             reverse("ops:workspace", args=[self.save_a.pk]),
             reverse("ops:schedule"),
             reverse("fleet:rocket_detail", args=[self.rocket_a.pk]),
