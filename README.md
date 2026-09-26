@@ -2,7 +2,7 @@
 
 《坎巴拉太空计划》(Kerbal Space Program) 玩家的**发射计划与任务记录管理工具**。
 
-> **状态**：设计阶段已完成（`docs/spec/00-最小系统.md`），**v1 代码已按规格 §10 的 S1–S4 全部实现**（每步一个 commit，`manage.py test` 85 项全绿）。
+> **状态**：v1 已实现（`docs/spec/00-最小系统.md` 的 S1–S4），并已完成**「写操作从 Admin 移到前台」改造**（`docs/spec/10-前台内联编辑改造.md`）。`manage.py test` 144 项全绿。
 
 ---
 
@@ -24,7 +24,7 @@
 
 | 项 | 选择 |
 |---|---|
-| 框架 | **Django 5.2**（Admin 覆盖 11 张表的 CRUD） |
+| 框架 | **Django 5.2**（前台页面负责增删改；Admin 保留作兜底，不放入口） |
 | 数据库 | **SQLite**（单文件 `db.sqlite3`，可直接拷贝备份） |
 | Python | **3.10**，conda 环境名 **`rocket`** |
 | 其他依赖 | **无**（不用 numpy、不用 DRF、不用 JS 库） |
@@ -35,20 +35,24 @@
 
 ## 仓库当前状态
 
-✅ **v1 已实现完毕，可以跑了。**
+✅ **v1 + 前台可写改造都已完成，可以跑了。**
 
 ```
 manage.py
 config/                  settings（zh-hans / Asia-Shanghai / 根 templates）+ urls
-core/                    Body 模型、constants.py、首页视图、ProtectedDeleteMixin、测试
-parts/                   FuelTank / Engine / ScienceInstrument
-fleet/                   Rocket / RocketStage / Payload、/rockets/<pk>/ 详情页
-spaceflight/             Site / Spacecraft（clean() 校验）
-ops/                     Save / FlightLog、/schedule/ 日程页
+core/                    Body 模型、constants.py、forms.py（表单基类 + program 注入）、
+                         views.py（首页存档列表 + 存档 CRUD + 四个共用视图基类）
+parts/                   三种部件模型 + 表单 + /reference/ 参考数据页与 CRUD
+fleet/                   Rocket / RocketStage / Payload + 表单 + 火箭详情与 CRUD（含级的 CRUD）
+spaceflight/             Site / Spacecraft（clean() 校验）+ 表单 + CRUD
+ops/                     Save / FlightLog + 表单 + /saves/<pk>/ 工作台 + /schedule/ + 发射日志 CRUD
 services/orbital.py      7 个纯计算函数（周期 / 拱点 / 高度 / 逐级 Δv）
-templates/               base.html + core/home.html + ops/schedule.html + fleet/rocket_detail.html
+templates/               base.html、form.html、confirm_delete.html、
+                         core/save_list.html、ops/workspace.html、ops/schedule.html、
+                         fleet/rocket_detail.html、parts/reference.html
 fixtures/bodies.json     6 个天体的种子数据（规格 §5.1），已随仓库提供
-docs/spec/00-最小系统.md   ★ 唯一权威源
+docs/spec/00-最小系统.md         数据模型 / 计算 / 种子数据（权威）
+docs/spec/10-前台内联编辑改造.md  前台页面与写操作（权威）
 README.md  requirements.txt  .gitignore
 ```
 
@@ -65,29 +69,44 @@ pip install -r requirements.txt
 # 2. 初始化数据库（已有 db.sqlite3 可跳过）
 python manage.py migrate
 python manage.py loaddata fixtures/bodies.json
-python manage.py createsuperuser        # 写操作全在 Admin，所以必须有一个账号
+python manage.py createsuperuser        # 只在想用 /admin/ 兜底时才需要
 
 # 3. 运行与自测
 python manage.py test                   # 85 项，应全绿
 python manage.py runserver 127.0.0.1:8000
 ```
 
-- 应用界面 <http://127.0.0.1:8000/>（首页 / 发射日程 / 火箭详情，全部只读）
-- 管理后台 <http://127.0.0.1:8000/admin/>（**所有增删改都在这里**）
+- 应用界面 <http://127.0.0.1:8000/>（**增删改都在前台**，不需要登录）
+- 管理后台 <http://127.0.0.1:8000/admin/>（保留作兜底，前台导航里没有入口）
 
-> 第一次使用时：先在 Admin 建一个**存档**，再录引擎/燃料罐，然后录火箭（级在火箭表单里用内联加）、发射场，最后录发射日志。
+> 第一次使用：`/` 首页直接新建一个**存档** → 进 `/saves/<pk>/` 工作台 → 到 `/reference/` 录引擎与燃料罐 → 回工作台录火箭（级在火箭详情页里加）、发射场、航天器、发射日志。
 
-> ⚠️ **环境陷阱**：本机 PATH 上的 `python` 是 `D:\MinGW\bin\python.exe`（**无 Django**）。跑本项目**必须先 `conda activate rocket`**。另本机 `conda` 不在 PATH 中，可执行文件在 `F:\Anaconda\Scripts\conda.exe`——必要时用全路径或在 conda prompt 里操作。
+> ⚠️ **环境陷阱**：本机 PATH 上的 `python` 是 `D:\MinGW\bin\python.exe`（**无 Django**）。跑本项目**必须先 `conda activate rocket`**，或直接用 `F:\Anaconda\envs\rocket\python.exe manage.py ...`。另本机 `conda` 不在 PATH 中，可执行文件在 `F:\Anaconda\Scripts\conda.exe`。
+
+---
+
+## 页面一览
+
+| 页面 | 路径 | 作用 |
+|---|---|---|
+| 存档列表（首页） | `/` | 全部存档 + 行内新建存档 + 全局统计 + 近期发射 |
+| 存档工作台 | `/saves/<pk>/` | 该存档下的火箭/载荷/发射场/航天器/发射日志，各一个只读表格 + 新增按钮 |
+| 火箭详情 | `/rockets/<pk>/` | 火箭属性 + 级序列表（降序）+ 逐级 Δv + 总 Δv；级的增删改入口 |
+| 参考数据 | `/reference/` | 引擎/燃料罐/科学设备可增删改；天体只读 |
+| 发射日程 | `/schedule/` | 全存档的待发任务 |
+| 新增/编辑页 | `/xxx/new/?save=<pk>`、`/xxx/<pk>/edit/` | 五个 `program` 必填表用 `?save=` 带入存档；级用 `?rocket=` |
+| 删除确认页 | `/xxx/<pk>/delete/` | 只读确认页 + POST 按钮（列表页的删除按钮只跳到这里） |
 
 ---
 
 ## 文档
 
-**只读这一份**：[`docs/spec/00-最小系统.md`](docs/spec/00-最小系统.md) —— 唯一权威源，11 张表 / 5 个 app / 7 个计算函数 / 3 个前台页面，一份文档讲完。
+- [`docs/spec/00-最小系统.md`](docs/spec/00-最小系统.md) —— **数据模型 / 计算 / 种子数据**的权威源（11 张表 / 5 个 app / 7 个计算函数）。
+- [`docs/spec/10-前台内联编辑改造.md`](docs/spec/10-前台内联编辑改造.md) —— **前台页面与写操作**的权威源（改造后 §00 里「前台只读、写操作全在 Admin」的说法已作废）。
 
-开发不需要读别的。`docs/archive/` 是设计过程存档（早期更庞大、已作废的设计），只在想知道「为什么这样定」时翻。
+`docs/archive/` 是设计过程存档（早期更庞大、已作废的设计），只在想知道「为什么这样定」时翻。
 
-**边界**：无 JavaScript、无 AJAX、无多态外键、无 1:1 继承、无嵌套 FormSet、无新依赖（只要 Django）。写操作全部走 Django Admin，前台只负责看。
+**边界**：无 JavaScript、无 AJAX、无多态外键、无 1:1 继承、无嵌套 FormSet、无新依赖（只要 Django）。前台页面全部是普通表单 POST + 重定向，删除一律走 `DeleteView`（仅 POST）。
 
 ---
 
@@ -101,15 +120,16 @@ python manage.py runserver 127.0.0.1:8000
 
 ---
 
-## 五个最容易出错的地方
+## 六个最容易出错的地方
 
 1. **`stage_order` 方向**：`1` = 最先点火的最下面一级（起飞级）；页面**降序**渲染（最上级在顶部），Δv **升序**累加（第 1 级的 `m₀` 要含上方所有级 + 载荷）。质量闭合要用 `vehicle_delta_v(...)[0]`（起飞级），不是 `[-1]`。
 2. **`sma` 不是高度**：高度 = `sma − Body.radius`（Kerbin 600 km）。混淆会产生 600 km 量级误差。
 3. **Δv 用 `G0 = 9.80665` 常数，不用所在天体的重力**：用当地重力在 Kerbin 上只差 0.03%（测不出来），在 Mun 上差 83%。防护办法是 `stage_delta_v()` 的签名里不出现任何重力参数。
 4. **存档外键叫 `program`，不能叫 `save`**：`save` 与 Django 的 `Model.save()` 同名，会遮蔽方法，让 `objects.create()` / Admin 保存直接抛 `TypeError: 'Save' object is not callable`（`manage.py check` 和 `makemigrations` 都查不出来）。
-5. **删存档要先清航天器与发射日志**：`FlightLog` 以 `PROTECT` 引用火箭/载荷/发射场，直接删存档会被 Django 拒绝。顺序写在 `ops.Save.delete()`，Admin 侧另有 `get_deleted_objects()` / `delete_queryset()` 配套。
+5. **删存档要先清航天器与发射日志**：`FlightLog` 以 `PROTECT` 引用火箭/载荷/发射场，直接删存档会被 Django 拒绝。顺序写在 `ops.Save.delete()`，前台删除页另有 `get_deleted_objects()` 配套（Admin 侧同理）。
+6. **`program` 必须从 URL/实例取，不能做成隐藏字段**：否则改一下 URL 就能把火箭写进别人的存档。表单里干脆不出现该字段（`core.forms.ProgramScopedFormMixin`）。
 
-完整说明见 [`docs/spec/00-最小系统.md`](docs/spec/00-最小系统.md) §4.6 / §4.11 / §7。**注意：v1 里没有多态外键**（级直接挂火箭，火箭/载荷等用普通外键归属存档），所以「不用 `GenericForeignKey`」不再是本项目的注意事项。
+完整说明见 [`docs/spec/00-最小系统.md`](docs/spec/00-最小系统.md) §4.6 / §4.11 / §7 与 [`docs/spec/10-前台内联编辑改造.md`](docs/spec/10-前台内联编辑改造.md) §5。**注意：v1 里没有多态外键**（级直接挂火箭，火箭/载荷等用普通外键归属存档），所以「不用 `GenericForeignKey`」不再是本项目的注意事项。
 
 ---
 

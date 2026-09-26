@@ -299,6 +299,28 @@ class FlightLogCrudTests(TestCase):
         self.other_rocket = Rocket.objects.create(name="别人家的火箭", program=self.other)
         self.site = Site.objects.create(name="本存档发射场", program=self.save, body=self.body)
 
+    def test_all_five_new_pages_render_without_program_field(self):
+        """五个新建页都能打开，且都不显示「所属存档」字段（文档 10 第 8.2 节）。"""
+        urls = [
+            reverse("fleet:rocket_create"),
+            reverse("fleet:payload_create"),
+            reverse("spaceflight:site_create"),
+            reverse("spaceflight:spacecraft_create"),
+            reverse("ops:flight_create"),
+        ]
+        for url in urls:
+            with self.subTest(url=url):
+                response = self.client.get(f"{url}?save={self.save.pk}")
+                self.assertEqual(response.status_code, 200)
+                self.assertNotContains(response, "所属存档")
+
+    def test_date_inputs_render_as_native_date_type(self):
+        response = self.client.get(f"{reverse('ops:flight_create')}?save={self.save.pk}")
+        html = response.content.decode()
+        # planned_date / actual_date 两个日期字段；input_type 只能是 date，不能是 text
+        self.assertEqual(html.count('type="date"'), 2)
+        self.assertNotIn('type="text" name="planned_date"', html)
+
     def payload(self, **overrides):
         data = {
             "name": "新任务", "state": FlightState.PLANNED, "planned_date": "2026-11-01",
