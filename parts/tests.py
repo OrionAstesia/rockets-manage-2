@@ -1,4 +1,6 @@
-"""部件库冒烟测试 + 参考数据页（改造文档 10 第 4.4 / 8.2 节）。"""
+"""部件库冒烟测试 + 参考数据四个列表页（文档 11 第 4.3 / 7.1 / 7.2 节）。"""
+
+import re
 
 from django.test import TestCase
 from django.urls import reverse
@@ -8,6 +10,12 @@ from fleet.models import Rocket, RocketStage
 from ops.models import Save
 
 from .models import Engine, FuelTank, FuelType, ScienceInstrument
+
+
+def subnav_link(html, href):
+    """取出指向 href 的 `<a>` 开标签（用来断言 active，不看别的活动元素）。"""
+    match = re.search(r'<a[^>]*href="%s"[^>]*>' % re.escape(href), html)
+    return match.group(0) if match else ""
 
 
 class PartsModelTests(TestCase):
@@ -181,5 +189,18 @@ class ReferenceListPagesTests(TestCase):
             with self.subTest(url_name=name):
                 content = self.client.get(reverse(name)).content.decode()
                 self.assertNotIn("/admin/", content)
+
+    def test_reference_subnav_exists_and_highlights_current_page(self):
+        """文档 11 §7.2：二级导航四项齐全，当前页高亮，其他项不高亮。"""
+        content = self.client.get(reverse("parts:engine_list")).content.decode()
+        subnav = content[content.index('class="bg-white border-bottom"'):content.index("<main")]
+        for slug in ("engines", "fueltanks", "instruments", "bodies"):
+            with self.subTest(slug=slug):
+                self.assertIn(f'href="/reference/{slug}/"', subnav)
+        self.assertIn("active", subnav_link(subnav, "/reference/engines/"))
+        self.assertNotIn("active", subnav_link(subnav, "/reference/fueltanks/"))
+        self.assertNotIn("active", subnav_link(subnav, "/reference/bodies/"))
+        # 侧栏「参考数据」在参考数据的任何页面上都高亮
+        self.assertIn("active", subnav_link(content, "/reference/engines/"))
 
 

@@ -5,6 +5,7 @@
 """
 
 import inspect
+import re
 import unittest
 from datetime import date
 
@@ -271,5 +272,63 @@ class SaveCrudTests(TestCase):
         )
         self.assertTrue(Save.objects.filter(pk=self.save.pk).exists())
         self.assertContains(response, "删除失败")
+
+
+def nav_link(html, href):
+    """取出指向 href 的那个 `<a>` 开标签，用来断言它有没有 `active` 类。
+
+    直接对整页做 `assertNotContains(..., "active")` 会被别的活动元素误伤，
+    所以按 href 精确定位（文档 11 §7.3）。
+    """
+    match = re.search(r'<a[^>]*href="%s"[^>]*>' % re.escape(href), html)
+    return match.group(0) if match else ""
+
+
+class SaveListHomeSplitTests(TestCase):
+    """文档 11 第 7.2 节：`/` 是暂空主页，存档列表搬到 `/saves/`，侧栏三模块。"""
+
+    MODULES = ("/saves/", "/reference/engines/", "/schedule/")
+
+    def test_home_page_is_a_placeholder(self):
+        response = self.client.get(reverse("core:home"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "主页建设中")
+        self.assertNotContains(response, "近期发射")     # 统计与近期发射留在 /saves/
+        self.assertNotContains(response, "还没有存档")
+
+    def test_save_list_holds_the_archive_list(self):
+        Save.objects.create(name="存档一")
+        Save.objects.create(name="存档二")
+        response = self.client.get(reverse("core:save_list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "存档一")
+        self.assertContains(response, "存档二")
+        self.assertContains(response, "新建存档")
+        self.assertContains(response, 'action="/saves/new/"')
+        self.assertEqual(len(response.context["save_rows"]), 2)   # 与数据库里的存档数一致
+
+    def test_sidebar_has_three_modules(self):
+        content = self.client.get(reverse("core:home")).content.decode()
+        for href in self.MODULES:
+            with self.subTest(href=href):
+                self.assertIn(f'href="{href}"', content)
+
+    def test_sidebar_highlights_nothing_on_the_home_page(self):
+        """主页不属于任何模块语义，所以侧栏三项都不高亮（文档 11 §3.1）。"""
+        content = self.client.get(reverse("core:home")).content.decode()
+        for href in self.MODULES:
+            with self.subTest(href=href):
+                self.assertNotIn("active", nav_link(content, href))
+
+    def test_sidebar_highlights_the_current_module(self):
+        for url, href in (
+            (reverse("core:save_list"), "/saves/"),
+            (reverse("parts:engine_list"), "/reference/engines/"),
+            (reverse("ops:schedule"), "/schedule/"),
+        ):
+            with self.subTest(url=url):
+                content = self.client.get(url).content.decode()
+                self.assertIn("active", nav_link(content, href))
+
 
 

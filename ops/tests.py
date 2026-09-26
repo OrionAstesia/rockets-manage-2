@@ -1,5 +1,6 @@
 """存档、发射日志的校验与删除策略测试（规格 §4.10–§4.12、§9）。"""
 
+import re
 from datetime import date
 
 from django.core.exceptions import ValidationError
@@ -13,6 +14,12 @@ from spaceflight.models import Site, Spacecraft
 
 from .forms import FlightLogForm
 from .models import FlightLog, FlightState, GameMode, Save
+
+
+def subnav_link(html, href):
+    """取出指向 href 的 `<a>` 开标签（用来断言 active，不看别的活动元素）。"""
+    match = re.search(r'<a[^>]*href="%s"[^>]*>' % re.escape(href), html)
+    return match.group(0) if match else ""
 
 
 class SaveModelTests(TestCase):
@@ -325,6 +332,29 @@ class SaveListPagesTests(TestCase):
     def test_unknown_save_is_404(self):
         response = self.client.get(reverse("ops:save_rockets", args=[99999]))
         self.assertEqual(response.status_code, 404)
+
+    def test_old_save_entry_redirects_to_rockets(self):
+        """文档 11 §2.2：旧的 /saves/<pk>/ 302 → 火箭列表。"""
+        response = self.client.get(reverse("ops:save_detail", args=[self.save_a.pk]))
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(
+            response.headers["Location"],
+            reverse("ops:save_rockets", args=[self.save_a.pk]),
+        )
+
+    def test_save_subnav_exists_and_highlights_current_page(self):
+        content = self.client.get(
+            reverse("ops:save_rockets", args=[self.save_a.pk])
+        ).content.decode()
+        subnav = content[content.index('class="bg-white border-bottom"'):content.index("<main")]
+        slugs = ("rockets", "payloads", "sites", "spacecraft", "flights")
+        for slug in slugs:
+            with self.subTest(slug=slug):
+                self.assertIn(f'href="/saves/{self.save_a.pk}/{slug}/"', subnav)
+        self.assertIn("active", subnav_link(subnav, f"/saves/{self.save_a.pk}/rockets/"))
+        self.assertNotIn("active", subnav_link(subnav, f"/saves/{self.save_a.pk}/payloads/"))
+        # 侧栏「存档」在存档模块的任何页面上都高亮
+        self.assertIn("active", subnav_link(content, "/saves/"))
 
     def test_no_admin_entry_anywhere(self):
         """文档 10 第 8.1 节：页面里没有「在后台编辑」按钮，导航里没有后台入口。"""

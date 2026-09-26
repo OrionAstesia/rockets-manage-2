@@ -2,7 +2,7 @@
 
 《坎巴拉太空计划》(Kerbal Space Program) 玩家的**发射计划与任务记录管理工具**。
 
-> **状态**：v1 已实现（`docs/spec/00-最小系统.md` 的 S1–S4），并已完成**「写操作从 Admin 移到前台」改造**（`docs/spec/10-前台内联编辑改造.md`）。`manage.py test` 144 项全绿。
+> **状态**：v1 已实现（`docs/spec/00-最小系统.md` 的 S1–S4），已完成**「写操作从 Admin 移到前台」改造**（`docs/spec/10-前台内联编辑改造.md`）与**「左侧导航 + 每类数据独立成页」重构**（`docs/spec/11-界面导航重构.md`）。`manage.py test` 158 项全绿。
 
 ---
 
@@ -35,24 +35,33 @@
 
 ## 仓库当前状态
 
-✅ **v1 + 前台可写改造都已完成，可以跑了。**
+✅ **v1 + 前台可写改造 + 导航重构都已完成，可以跑了。**
 
 ```
 manage.py
 config/                  settings（zh-hans / Asia-Shanghai / 根 templates）+ urls
-core/                    Body 模型、constants.py、forms.py（表单基类 + program 注入）、
-                         views.py（首页存档列表 + 存档 CRUD + 四个共用视图基类）
-parts/                   三种部件模型 + 表单 + /reference/ 参考数据页与 CRUD
+core/                    Body 模型、constants.py（常量）、forms.py（表单基类 + program 注入）、
+                         views.py（空主页 + 存档列表 + 存档 CRUD + 共用视图基类）
+parts/                   三种部件模型 + 表单 + /reference/<四类>/ 列表页与 CRUD
 fleet/                   Rocket / RocketStage / Payload + 表单 + 火箭详情与 CRUD（含级的 CRUD）
 spaceflight/             Site / Spacecraft（clean() 校验）+ 表单 + CRUD
-ops/                     Save / FlightLog + 表单 + /saves/<pk>/ 工作台 + /schedule/ + 发射日志 CRUD
+ops/                     Save / FlightLog + 表单 + /saves/<pk>/<五类>/ 列表页 + /schedule/
 services/orbital.py      7 个纯计算函数（周期 / 拱点 / 高度 / 逐级 Δv）
-templates/               base.html、form.html、confirm_delete.html、
-                         core/save_list.html、ops/workspace.html、ops/schedule.html、
-                         fleet/rocket_detail.html、parts/reference.html
+templates/
+  base.html              左侧主导航（三大模块）+ {% block subnav %} + messages
+  form.html  confirm_delete.html        通用表单页 / 删除确认页
+  core/home.html         空主页（占位）
+  core/save_list.html    存档列表 /saves/
+  ops/save_base.html     存档二级导航骨架
+  ops/save_{rockets,payloads,sites,spacecraft,flights}.html   每个集合一页
+  ops/schedule.html      发射日程
+  fleet/rocket_detail.html   火箭详情（级序 + Δv）
+  parts/reference_base.html  参考数据二级导航骨架
+  parts/{engine,fueltank,instrument,body}_list.html          每类一页
 fixtures/bodies.json     6 个天体的种子数据（规格 §5.1），已随仓库提供
-docs/spec/00-最小系统.md         数据模型 / 计算 / 种子数据（权威）
-docs/spec/10-前台内联编辑改造.md  前台页面与写操作（权威）
+docs/spec/00-最小系统.md           数据模型 / 计算 / 种子数据（权威）
+docs/spec/10-前台内联编辑改造.md    前台可写与 CRUD 页（权威）
+docs/spec/11-界面导航重构.md        导航结构与页面拆分（权威）
 README.md  requirements.txt  .gitignore
 ```
 
@@ -87,13 +96,18 @@ python manage.py runserver 127.0.0.1:8000
 
 ## 页面一览
 
+导航是**左侧栏**，只有三大模块（存档 / 参考数据 / 发射日程）；存档与参考数据各有一层**二级导航**，每类数据独立成页（一页一张表）。
+
 | 页面 | 路径 | 作用 |
 |---|---|---|
-| 存档列表（首页） | `/` | 全部存档 + 行内新建存档 + 全局统计 + 近期发射 |
-| 存档工作台 | `/saves/<pk>/` | 该存档下的火箭/载荷/发射场/航天器/发射日志，各一个只读表格 + 新增按钮 |
+| 主页（暂空） | `/` | 占位文案；只能从侧栏顶部的应用名进入，不在侧栏项里 |
+| 存档列表 | `/saves/` | 全部存档 + 行内新建存档 + 全局统计 + 近期发射 |
+| 存档各集合 | `/saves/<pk>/{rockets,payloads,sites,spacecraft,flights}/` | 五类数据各一页（二级导航切换） |
+| 旧存档入口 | `/saves/<pk>/` | 302 → `/saves/<pk>/rockets/` |
 | 火箭详情 | `/rockets/<pk>/` | 火箭属性 + 级序列表（降序）+ 逐级 Δv + 总 Δv；级的增删改入口 |
-| 参考数据 | `/reference/` | 引擎/燃料罐/科学设备可增删改；天体只读 |
-| 发射日程 | `/schedule/` | 全存档的待发任务 |
+| 参考数据 | `/reference/{engines,fueltanks,instruments,bodies}/` | 三类部件可增删改；天体只读 |
+| 旧参考数据入口 | `/reference/` | 302 → `/reference/engines/` |
+| 发射日程 | `/schedule/` | 全存档的待发任务（跨存档） |
 | 新增/编辑页 | `/xxx/new/?save=<pk>`、`/xxx/<pk>/edit/` | 五个 `program` 必填表用 `?save=` 带入存档；级用 `?rocket=` |
 | 删除确认页 | `/xxx/<pk>/delete/` | 只读确认页 + POST 按钮（列表页的删除按钮只跳到这里） |
 
@@ -102,7 +116,8 @@ python manage.py runserver 127.0.0.1:8000
 ## 文档
 
 - [`docs/spec/00-最小系统.md`](docs/spec/00-最小系统.md) —— **数据模型 / 计算 / 种子数据**的权威源（11 张表 / 5 个 app / 7 个计算函数）。
-- [`docs/spec/10-前台内联编辑改造.md`](docs/spec/10-前台内联编辑改造.md) —— **前台页面与写操作**的权威源（改造后 §00 里「前台只读、写操作全在 Admin」的说法已作废）。
+- [`docs/spec/10-前台内联编辑改造.md`](docs/spec/10-前台内联编辑改造.md) —— **前台可写与各类 CRUD 页**的权威源（`00` 里「前台只读、写操作全在 Admin」的说法已作废）。
+- [`docs/spec/11-界面导航重构.md`](docs/spec/11-界面导航重构.md) —— **导航结构与页面拆分**的权威源（左侧栏、二级导航、每类数据独立成页、`/` 与 `/saves/` 的分工）。
 
 `docs/archive/` 是设计过程存档（早期更庞大、已作废的设计），只在想知道「为什么这样定」时翻。
 
