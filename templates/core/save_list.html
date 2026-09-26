@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+
+{% block title %}存档 · KSP 存档管理器{% endblock %}
+
+{% block content %}
+<h1 class="h4 mb-3">存档</h1>
+
+<div class="card mb-4">
+  <div class="card-header">新建存档</div>
+  <div class="card-body">
+    <form method="post" action="{% url 'core:save_create' %}" class="row g-2 align-items-end">
+      {% csrf_token %}
+      <div class="col-md-4">
+        <label class="form-label" for="{{ save_form.name.id_for_label }}">{{ save_form.name.label }}</label>
+        {{ save_form.name }}
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="{{ save_form.start_date.id_for_label }}">{{ save_form.start_date.label }}</label>
+        {{ save_form.start_date }}
+      </div>
+      <div class="col-md-3">
+        <label class="form-label" for="{{ save_form.game_mode.id_for_label }}">{{ save_form.game_mode.label }}</label>
+        {{ save_form.game_mode }}
+      </div>
+      <div class="col-md-2">
+        <button type="submit" class="btn btn-primary w-100">新建</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<h2 class="h5">全部存档</h2>
+<div class="table-responsive">
+  <table class="table table-sm table-striped align-middle">
+    <thead class="table-light">
+      <tr>
+        <th>名称</th>
+        <th>模式</th>
+        <th>开始日期</th>
+        <th class="text-end">火箭</th>
+        <th class="text-end">发射日志</th>
+        <th class="text-end">操作</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in save_rows %}
+      <tr>
+        <td><a href="/saves/{{ row.pk }}/">{{ row.name }}</a></td>
+        <td>{{ row.get_game_mode_display }}</td>
+        <td>{{ row.start_date|default_if_none:"—" }}</td>
+        <td class="text-end">{{ row.rocket_total }}</td>
+        <td class="text-end">{{ row.flight_total }}</td>
+        <td class="text-end text-nowrap">
+          <a class="btn btn-sm btn-outline-secondary" href="{% url 'core:save_update' row.pk %}">编辑</a>
+          <form class="d-inline" method="post" action="{% url 'core:save_delete' row.pk %}">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-sm btn-outline-danger">删除</button>
+          </form>
+        </td>
+      </tr>
+      {% empty %}
+      <tr>
+        <td colspan="6" class="text-muted">还没有存档。用上面的表单新建一个，再进去录火箭与发射场。</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="row g-4 mt-4">
+  <div class="col-lg-4">
+    <h2 class="h5">在役航天器</h2>
+    <div class="card">
+      <div class="card-body">
+        <p class="mb-2">共 <strong>{{ spacecraft_counts.total }}</strong> 台在役</p>
+        <p class="mb-0">
+          {% for row in spacecraft_counts.rows %}{{ row.label }} {{ row.total }}{% if not forloop.last %} · {% endif %}{% empty %}<span class="text-muted">没有在役航天器</span>{% endfor %}
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-8">
+    <h2 class="h5">近期发射</h2>
+    <div class="table-responsive">
+      <table class="table table-sm table-striped align-middle">
+        <thead class="table-light">
+          <tr>
+            <th>任务名称</th>
+            <th>状态</th>
+            <th>计划日期</th>
+            <th>实际日期</th>
+            <th>运载火箭</th>
+            <th>发射场</th>
+            <th>所属存档</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for flight in recent_flights %}
+          <tr>
+            <td>{{ flight.name }}</td>
+            <td>{{ flight.get_state_display }}</td>
+            <td>{{ flight.planned_date|default_if_none:"—" }}</td>
+            <td>{{ flight.actual_date|default_if_none:"—" }}</td>
+            <td><a href="{% url 'fleet:rocket_detail' flight.rocket.pk %}">{{ flight.rocket }}</a></td>
+            <td>{{ flight.site }}</td>
+            <td>{{ flight.program }}</td>
+          </tr>
+          {% empty %}
+          <tr>
+            <td colspan="7" class="text-muted">还没有任何发射记录或计划。</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

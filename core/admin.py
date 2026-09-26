@@ -16,8 +16,10 @@ class ProtectedDeleteMixin:
 
     @staticmethod
     def _protected_message(exc):
-        names = "、".join(str(obj) for obj in exc.protected_objects[:5])
-        more = " 等" if len(exc.protected_objects) > 5 else ""
+        # exc.protected_objects 是 set：不能切片，也没有固定顺序，所以先按字符串排序
+        objs = sorted(exc.protected_objects, key=str)
+        names = "、".join(str(obj) for obj in objs[:5])
+        more = " 等" if len(objs) > 5 else ""
         return f"删除失败：仍有受保护的下级数据引用它（{names}{more}），请先处理这些数据。"
 
     def _changelist_url(self):

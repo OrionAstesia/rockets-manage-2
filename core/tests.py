@@ -178,6 +178,17 @@ class HomePageTests(TestCase):
         self.assertContains(response, "生涯模式")
         self.assertContains(response, "2026年1月1日")   # zh-hans 本地化日期
 
+    def test_save_row_shows_counts_and_links_to_workspace(self):
+        response = self.client.get(reverse("core:home"))
+        self.assertContains(response, f"/saves/{self.save.pk}/")
+        row = next(r for r in response.context["save_rows"] if r.pk == self.save.pk)
+        self.assertEqual(row.rocket_total, 1)
+        self.assertEqual(row.flight_total, 7)          # 两个 Count 都加了 distinct，不会被乘积放大
+
+    def test_home_has_inline_create_form(self):
+        response = self.client.get(reverse("core:home"))
+        self.assertContains(response, 'action="/saves/new/"')
+
     def test_empty_state(self):
         FlightLog.objects.all().delete()
         Save.objects.all().delete()
@@ -187,4 +198,75 @@ class HomePageTests(TestCase):
         self.assertContains(response, "还没有任何发射记录或计划")
         self.assertContains(response, "没有在役航天器")
         self.assertContains(response, "还没有存档")
+
+
+class SaveCrudTests(TestCase):
+    """文档 10 第 4.1 / 8.1：存档的增删改；删除确认页要列出连带数量。"""
+
+    def setUp(self):
+        self.save = Save.objects.create(name="生涯存档", game_mode=GameMode.CAREER)
+        self.body = Body.objects.create(name="Kerbin", mu=3.5316e12, radius=600000)
+        self.rocket = Rocket.objects.create(name="火箭 A", program=self.save)
+        self.site = Site.objects.create(name="发射场", program=self.save, body=self.body)
+
+    def test_create_save(self):
+        response = self.client.post(
+            reverse("core:save_create"),
+            {"name": "新存档", "start_date": "2026-02-02", "game_mode": GameMode.SANDBOX},
+        )
+        self.assertRedirects(response, reverse("core:home"))
+        save = Save.objects.get(name="新存档")
+        self.assertEqual(save.game_mode, GameMode.SANDBOX)
+        self.assertEqual(save.start_date, date(2026, 2, 2))
+
+    def test_update_save(self):
+        response = self.client.post(
+            reverse("core:save_update", args=[self.save.pk]),
+            {"name": "改名了", "start_date": "", "game_mode": GameMode.SCIENCE},
+        )
+        self.assertRedirects(response, reverse("core:home"))
+        self.save.refresh_from_db()
+        self.assertEqual(self.save.name, "改名了")
+        self.assertEqual(self.save.game_mode, GameMode.SCIENCE)
+
+    def test_delete_confirm_page_lists_related_counts(self):
+        FlightLog.objects.create(
+            name="任务", rocket=self.rocket, site=self.site, program=self.save,
+        )
+        response = self.client.get(reverse("core:save_delete", args=[self.save.pk]))
+        self.assertEqual(response.status_code, 200)
+        for expected in ("火箭 1", "发射场 1", "发射日志 1", "航天器 0", "载荷 0"):
+            self.assertContains(response, expected)
+
+    def test_delete_without_confirmation_only_shows_page(self):
+        """列表页行尾的删除表单不带 confirmed，只应跳到确认页而不是真删。"""
+        response = self.client.post(reverse("core:save_delete", args=[self.save.pk]))
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(Save.objects.filter(pk=self.save.pk).exists())
+
+    def test_confirmed_delete_cascades_to_contents(self):
+        FlightLog.objects.create(
+            name="任务", rocket=self.rocket, site=self.site, program=self.save,
+        )
+        response = self.client.post(
+            reverse("core:save_delete", args=[self.save.pk]), {"confirmed": "yes"},
+        )
+        self.assertRedirects(response, reverse("core:home"))
+        self.assertFalse(Save.objects.exists())
+        self.assertFalse(Rocket.objects.exists())
+        self.assertFalse(Site.objects.exists())
+        self.assertFalse(FlightLog.objects.exists())
+
+    def test_delete_blocked_by_foreign_flight_shows_message(self):
+        """别的存档的日志引用了本存档的火箭 → 友好提示，不是 500。"""
+        other = Save.objects.create(name="另一个存档")
+        FlightLog.objects.create(
+            name="跨存档任务", rocket=self.rocket, site=self.site, program=other,
+        )
+        response = self.client.post(
+            reverse("core:save_delete", args=[self.save.pk]), {"confirmed": "yes"}, follow=True,
+        )
+        self.assertTrue(Save.objects.filter(pk=self.save.pk).exists())
+        self.assertContains(response, "删除失败")
+
 
