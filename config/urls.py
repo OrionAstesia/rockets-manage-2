@@ -14,5 +14,6 @@ urlpatterns = [
     path("", include("core.urls")),
     path("", include("ops.urls")),
     path("", include("fleet.urls")),
+    path("", include("parts.urls")),
     path("", include("spaceflight.urls")),
 ]

@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+
+{% block title %}参考数据 · KSP 存档管理器{% endblock %}
+
+{% block content %}
+<h1 class="h4 mb-1">参考数据</h1>
+<p class="text-muted">引擎 / 燃料罐 / 科学设备是所有存档共用的部件；天体由种子数据提供，只读。</p>
+
+{# ── 天体（只读） ────────────────────────────────────── #}
+<div class="d-flex justify-content-between align-items-center mt-4">
+  <h2 class="h5 mb-0">天体</h2>
+  <span class="text-muted small">共 {{ bodies|length }} 个（只读）</span>
+</div>
+<div class="table-responsive">
+  <table class="table table-sm table-striped align-middle">
+    <thead class="table-light">
+      <tr>
+        <th>名称</th>
+        <th class="text-end">标准重力参数 μ (m³/s²)</th>
+        <th class="text-end">半径 (m)</th>
+        <th>有大气</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for body in bodies %}
+      <tr>
+        <td>{{ body.name }}</td>
+        <td class="text-end">{{ body.mu|default_if_none:"—" }}</td>
+        <td class="text-end">{{ body.radius|default_if_none:"—" }}</td>
+        <td>{{ body.has_atmosphere|yesno:"是,否" }}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="4" class="text-muted">没有天体数据，请先执行 loaddata fixtures/bodies.json。</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{# ── 引擎 ────────────────────────────────────────────── #}
+<div class="d-flex justify-content-between align-items-center mt-4">
+  <h2 class="h5 mb-0">引擎</h2>
+  <div>
+    <span class="text-muted small me-2">共 {{ engines|length }} 个引擎</span>
+    <a class="btn btn-sm btn-primary" href="{% url 'parts:engine_create' %}">+ 新增</a>
+  </div>
+</div>
+<div class="table-responsive">
+  <table class="table table-sm table-striped align-middle">
+    <thead class="table-light">
+      <tr>
+        <th>名称</th>
+        <th class="text-end">直径 (m)</th>
+        <th class="text-end">干重 (t)</th>
+        <th class="text-end">海平面推力 (kN)</th>
+        <th class="text-end">真空推力 (kN)</th>
+        <th class="text-end">海平面比冲 (s)</th>
+        <th class="text-end">真空比冲 (s)</th>
+        <th class="text-end">造价 (√)</th>
+        <th class="text-end">操作</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for engine in engines %}
+      <tr>
+        <td>{{ engine.name }}</td>
+        <td class="text-end">{{ engine.diameter|default_if_none:"—" }}</td>
+        <td class="text-end">{{ engine.dry_mass }}</td>
+        <td class="text-end">{{ engine.thrust_asl }}</td>
+        <td class="text-end">{{ engine.thrust_vac }}</td>
+        <td class="text-end">{{ engine.isp_asl }}</td>
+        <td class="text-end">{{ engine.isp_vac }}</td>
+        <td class="text-end">{{ engine.cost }}</td>
+        <td class="text-end text-nowrap">
+          <a class="btn btn-sm btn-outline-secondary" href="{% url 'parts:engine_update' engine.pk %}">编辑</a>
+          <form class="d-inline" method="post" action="{% url 'parts:engine_delete' engine.pk %}">
+            {% csrf_token %}<button type="submit" class="btn btn-sm btn-outline-danger">删除</button>
+          </form>
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="9" class="text-muted">还没有引擎。点「+ 新增」录入一个，火箭的级才能选到它。</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{# ── 燃料罐 ────────────────────────────────────────────── #}
+<div class="d-flex justify-content-between align-items-center mt-4">
+  <h2 class="h5 mb-0">燃料罐</h2>
+  <div>
+    <span class="text-muted small me-2">共 {{ fuel_tanks|length }} 个燃料罐</span>
+    <a class="btn btn-sm btn-primary" href="{% url 'parts:fueltank_create' %}">+ 新增</a>
+  </div>
+</div>
+<div class="table-responsive">
+  <table class="table table-sm table-striped align-middle">
+    <thead class="table-light">
+      <tr>
+        <th>名称</th>
+        <th class="text-end">直径 (m)</th>
+        <th class="text-end">干重 (t)</th>
+        <th class="text-end">容量（单位）</th>
+        <th>燃料类型</th>
+        <th class="text-end">造价 (√)</th>
+        <th class="text-end">操作</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for tank in fuel_tanks %}
+      <tr>
+        <td>{{ tank.name }}</td>
+        <td class="text-end">{{ tank.diameter|default_if_none:"—" }}</td>
+        <td class="text-end">{{ tank.dry_mass }}</td>
+        <td class="text-end">{{ tank.capacity }}</td>
+        <td>{{ tank.get_fuel_type_display }}</td>
+        <td class="text-end">{{ tank.cost }}</td>
+        <td class="text-end text-nowrap">
+          <a class="btn btn-sm btn-outline-secondary" href="{% url 'parts:fueltank_update' tank.pk %}">编辑</a>
+          <form class="d-inline" method="post" action="{% url 'parts:fueltank_delete' tank.pk %}">
+            {% csrf_token %}<button type="submit" class="btn btn-sm btn-outline-danger">删除</button>
+          </form>
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="7" class="text-muted">还没有燃料罐。点「+ 新增」录入一个。</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{# ── 科学设备 ────────────────────────────────────────────── #}
+<div class="d-flex justify-content-between align-items-center mt-4">
+  <h2 class="h5 mb-0">科学设备</h2>
+  <div>
+    <span class="text-muted small me-2">共 {{ instruments|length }} 个科学设备</span>
+    <a class="btn btn-sm btn-primary" href="{% url 'parts:instrument_create' %}">+ 新增</a>
+  </div>
+</div>
+<div class="table-responsive">
+  <table class="table table-sm table-striped align-middle">
+    <thead class="table-light">
+      <tr>
+        <th>名称</th>
+        <th class="text-end">干重 (t)</th>
+        <th>实验类型</th>
+        <th class="text-end">数据量 (Mits)</th>
+        <th>可重复使用</th>
+        <th>需要乘员</th>
+        <th class="text-end">造价 (√)</th>
+        <th class="text-end">操作</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for instrument in instruments %}
+      <tr>
+        <td>{{ instrument.name }}</td>
+        <td class="text-end">{{ instrument.dry_mass }}</td>
+        <td>{{ instrument.experiment_type|default:"—" }}</td>
+        <td class="text-end">{{ instrument.data_value }}</td>
+        <td>{{ instrument.is_repeatable|yesno:"是,否" }}</td>
+        <td>{{ instrument.requires_crew|yesno:"是,否" }}</td>
+        <td class="text-end">{{ instrument.cost }}</td>
+        <td class="text-end text-nowrap">
+          <a class="btn btn-sm btn-outline-secondary" href="{% url 'parts:instrument_update' instrument.pk %}">编辑</a>
+          <form class="d-inline" method="post" action="{% url 'parts:instrument_delete' instrument.pk %}">
+            {% csrf_token %}<button type="submit" class="btn btn-sm btn-outline-danger">删除</button>
+          </form>
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="8" class="text-muted">还没有科学设备。点「+ 新增」录入一个。</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

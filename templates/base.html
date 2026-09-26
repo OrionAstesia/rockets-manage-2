@@ -13,7 +13,7 @@
     <ul class="navbar-nav me-auto">
       {# 导航只有这 3 个前台页面；Admin 保留代码但不放入口（改造文档 10 第 5.4 节）#}
       <li class="nav-item"><a class="nav-link" href="{% url 'core:home' %}">存档</a></li>
-      <li class="nav-item"><a class="nav-link" href="/reference/">参考数据</a></li>
+      <li class="nav-item"><a class="nav-link" href="{% url 'parts:reference' %}">参考数据</a></li>
       <li class="nav-item"><a class="nav-link" href="{% url 'ops:schedule' %}">发射日程</a></li>
     </ul>
   </div>
