@@ -7,7 +7,7 @@
   <div>
     <h1 class="h4 mb-0">{{ rocket.name }}</h1>
     <div class="text-muted small">
-      所属存档：<a href="{% url 'ops:workspace' rocket.program_id %}">{{ rocket.program }}</a>
+      所属存档：<a href="{% url 'ops:save_rockets' rocket.program_id %}">{{ rocket.program }}</a>
     </div>
   </div>
   <div class="text-nowrap">

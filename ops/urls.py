@@ -4,13 +4,13 @@ from .views import (
     FlightLogCreateView,
     FlightLogDeleteView,
     FlightLogUpdateView,
+    SaveDetailRedirectView,
     SaveFlightsView,
     SavePayloadsView,
     SaveRocketsView,
     SaveSitesView,
     SaveSpacecraftView,
     ScheduleView,
-    WorkspaceView,
 )
 
 app_name = "ops"
@@ -22,8 +22,8 @@ urlpatterns = [
     path("saves/<int:pk>/sites/", SaveSitesView.as_view(), name="save_sites"),
     path("saves/<int:pk>/spacecraft/", SaveSpacecraftView.as_view(), name="save_spacecraft"),
     path("saves/<int:pk>/flights/", SaveFlightsView.as_view(), name="save_flights"),
-    # 旧入口（下一步改成 302 到火箭列表；本步先保留工作台，测试仍绿）
-    path("saves/<int:pk>/", WorkspaceView.as_view(), name="workspace"),
+    # 旧入口（原工作台）→ 302 到火箭列表
+    path("saves/<int:pk>/", SaveDetailRedirectView.as_view(), name="save_detail"),
     path("schedule/", ScheduleView.as_view(), name="schedule"),
     path("flights/new/", FlightLogCreateView.as_view(), name="flight_create"),
     path("flights/<int:pk>/edit/", FlightLogUpdateView.as_view(), name="flight_update"),

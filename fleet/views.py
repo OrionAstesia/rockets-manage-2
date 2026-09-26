@@ -41,6 +41,7 @@ class RocketDetailView(DetailView):
 class RocketCreateView(ScopedCreateView):
     model = Rocket
     form_class = RocketForm
+    list_url_name = "ops:save_rockets"
 
 
 class RocketUpdateView(ScopedUpdateView):
@@ -48,11 +49,13 @@ class RocketUpdateView(ScopedUpdateView):
     form_class = RocketForm
 
     def get_source_url(self):
+        # 有意的例外：改完火箭回它的详情页（要看级与 Δv），不回列表
         return reverse("fleet:rocket_detail", args=[self.object.pk])
 
 
 class RocketDeleteView(ScopedDeleteView):
     model = Rocket
+    list_url_name = "ops:save_rockets"
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
@@ -63,15 +66,18 @@ class RocketDeleteView(ScopedDeleteView):
 class PayloadCreateView(ScopedCreateView):
     model = Payload
     form_class = PayloadForm
+    list_url_name = "ops:save_payloads"
 
 
 class PayloadUpdateView(ScopedUpdateView):
     model = Payload
     form_class = PayloadForm
+    list_url_name = "ops:save_payloads"
 
 
 class PayloadDeleteView(ScopedDeleteView):
     model = Payload
+    list_url_name = "ops:save_payloads"
 
 
 class StageCreateView(FormPageMixin, CreateView):

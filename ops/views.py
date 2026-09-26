@@ -1,11 +1,12 @@
 """存档各集合的列表页、发射日程与发射日志的增删改（文档 11 第 4.1 节）。
 
 每个集合**独立成页**：一页只显示一张表，二级导航在 `templates/ops/save_base.html` 里。
+旧的 `/saves/<pk>/`（工作台）现在是 302 → 火箭列表。
 """
 
 from django.db.models import Count, F
 from django.urls import reverse
-from django.views.generic import DetailView, ListView
+from django.views.generic import ListView, RedirectView
 
 from core.views import (
     SaveScopedListView,
@@ -18,7 +19,7 @@ from services.orbital import orbital_period
 from spaceflight.models import Site, Spacecraft
 
 from .forms import FlightLogForm
-from .models import FlightLog, FlightState, Save
+from .models import FlightLog, FlightState
 
 
 def result_text(flight):
@@ -42,30 +43,6 @@ def period_text(spacecraft):
     if seconds is None:
         return "—"
     return f"{seconds:,.1f} s · {days:.4f} Kerbin 天"
-
-
-class WorkspaceView(DetailView):
-    """存档工作台 `/saves/<pk>/`。"""
-
-    model = Save
-    template_name = "ops/workspace.html"
-    context_object_name = "save"
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        save = self.object
-        ctx["rockets"] = save.rockets.annotate(stage_total=Count("stages"))
-        ctx["payloads"] = save.payloads.all()
-        ctx["sites"] = save.sites.select_related("body")
-        ctx["spacecraft_rows"] = [
-            {"obj": sc, "period": period_text(sc)}
-            for sc in save.spacecraft.select_related("body")
-        ]
-        ctx["flight_rows"] = [
-            {"obj": flight, "result": result_text(flight)}
-            for flight in save.flights.select_related("rocket", "site")
-        ]
-        return ctx
 
 
 class SaveRocketsView(SaveScopedListView):
@@ -114,6 +91,15 @@ class SaveFlightsView(SaveScopedListView):
         return [{"obj": flight, "result": result_text(flight)} for flight in super().get_queryset()]
 
 
+class SaveDetailRedirectView(RedirectView):
+    """旧的 `/saves/<pk>/`（原工作台）→ 火箭列表。302，将来可能再调（文档 11 第 2.2 节）。"""
+
+    permanent = False
+
+    def get_redirect_url(self, *args, **kwargs):
+        return reverse("ops:save_rockets", args=[kwargs["pk"]])
+
+
 class ScheduleView(ListView):
     """发射日程：全存档的待发任务，按计划日期升序（`planned_date` 为空的排最后）。"""
 
@@ -132,15 +118,15 @@ class ScheduleView(ListView):
 class FlightLogCreateView(ScopedCreateView):
     model = FlightLog
     form_class = FlightLogForm
+    list_url_name = "ops:save_flights"
 
 
 class FlightLogUpdateView(ScopedUpdateView):
     model = FlightLog
     form_class = FlightLogForm
+    list_url_name = "ops:save_flights"
 
 
 class FlightLogDeleteView(ScopedDeleteView):
     model = FlightLog
-
-    def get_source_url(self):
-        return reverse("ops:workspace", args=[self.object.program_id])
+    list_url_name = "ops:save_flights"

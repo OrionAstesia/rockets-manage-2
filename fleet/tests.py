@@ -209,7 +209,7 @@ class ProgramScopedFormTests(TestCase):
                 "first_flight_date": "", "crew_capacity": "0", "cost": "100", "note": "",
             },
         )
-        self.assertRedirects(response, reverse("ops:workspace", args=[self.save.pk]))
+        self.assertRedirects(response, reverse("ops:save_rockets", args=[self.save.pk]))
         rocket = Rocket.objects.get(name="新火箭")
         self.assertEqual(rocket.program_id, self.save.pk)
 
@@ -249,12 +249,12 @@ class ProgramScopedFormTests(TestCase):
         rocket.save()
         self.assertEqual(Rocket.objects.get(pk=rocket.pk).series, "改一下")
 
-    def test_delete_rocket_redirects_to_workspace(self):
+    def test_delete_rocket_redirects_to_rocket_list(self):
         rocket = Rocket.objects.create(name="要删的火箭", program=self.save)
         response = self.client.post(
             reverse("fleet:rocket_delete", args=[rocket.pk]), {"confirmed": "yes"},
         )
-        self.assertRedirects(response, reverse("ops:workspace", args=[self.save.pk]))
+        self.assertRedirects(response, reverse("ops:save_rockets", args=[self.save.pk]))
         self.assertFalse(Rocket.objects.filter(pk=rocket.pk).exists())
 
     def test_delete_rocket_blocked_when_it_has_flights(self):
@@ -284,7 +284,7 @@ class ProgramScopedFormTests(TestCase):
                 "crew_capacity": "0", "cost": "0", "note": "",
             },
         )
-        self.assertRedirects(response, reverse("ops:workspace", args=[self.save.pk]))
+        self.assertRedirects(response, reverse("ops:save_payloads", args=[self.save.pk]))
         payload = Payload.objects.get(name="新载荷")
         self.assertEqual(payload.program_id, self.save.pk)
 

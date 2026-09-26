@@ -45,7 +45,7 @@
     <tbody>
       {% for row in save_rows %}
       <tr>
-        <td><a href="{% url 'ops:workspace' row.pk %}">{{ row.name }}</a></td>
+        <td><a href="{% url 'ops:save_rockets' row.pk %}">{{ row.name }}</a></td>
         <td>{{ row.get_game_mode_display }}</td>
         <td>{{ row.start_date|default_if_none:"—" }}</td>
         <td class="text-end">{{ row.rocket_total }}</td>

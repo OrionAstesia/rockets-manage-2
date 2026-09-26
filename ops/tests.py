@@ -210,8 +210,8 @@ class SchedulePageTests(TestCase):
         self.assertContains(response, "目前没有计划中的发射")
 
 
-class WorkspaceTests(TestCase):
-    """改造文档 10 第 4.2 / 8.1 / 8.2 节：存档工作台与存档隔离。"""
+class SaveListPagesTests(TestCase):
+    """文档 11 第 7.1 节：五类数据各自独立成页，每页只显示本存档的数据。"""
 
     def setUp(self):
         self.save_a = Save.objects.create(name="存档 A")
@@ -220,41 +220,65 @@ class WorkspaceTests(TestCase):
         self.rocket_a = Rocket.objects.create(name="A 的火箭", program=self.save_a)
         self.rocket_b = Rocket.objects.create(name="B 的火箭", program=self.save_b)
         self.site_a = Site.objects.create(name="A 的发射场", program=self.save_a, body=self.body)
-        Site.objects.create(name="B 的发射场", program=self.save_b, body=self.body)
+        self.site_b = Site.objects.create(name="B 的发射场", program=self.save_b, body=self.body)
         FlightLog.objects.create(
             name="A 的任务", rocket=self.rocket_a, site=self.site_a, program=self.save_a,
+        )
+        self.flight_b = FlightLog.objects.create(
+            name="B 的任务", rocket=self.rocket_b, site=self.site_b, program=self.save_b,
         )
         Spacecraft.objects.create(
             name="A 的航天器", program=self.save_a, body=self.body,
             sma=700000, eccentricity=0.0,
         )
+        Spacecraft.objects.create(
+            name="B 的航天器", program=self.save_b, body=self.body,
+        )
 
-    def test_workspace_renders(self):
-        response = self.client.get(reverse("ops:workspace", args=[self.save_a.pk]))
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "存档 A")
+    def test_all_five_pages_render(self):
+        for name in (
+            "save_rockets", "save_payloads", "save_sites", "save_spacecraft", "save_flights",
+        ):
+            with self.subTest(url_name=name):
+                response = self.client.get(reverse(f"ops:{name}", args=[self.save_a.pk]))
+                self.assertEqual(response.status_code, 200)
+                self.assertContains(response, "存档 A")
 
-    def test_workspace_shows_only_its_own_program_data(self):
-        response = self.client.get(reverse("ops:workspace", args=[self.save_a.pk]))
-        self.assertContains(response, "A 的火箭")
-        self.assertContains(response, "A 的发射场")
-        self.assertNotContains(response, "B 的火箭")
-        self.assertNotContains(response, "B 的发射场")
+    def test_pages_are_program_scoped(self):
+        """每页只出现本存档的数据（文档 11 §8.2「只显示本存档的数据」）。"""
+        expectations = {
+            "save_rockets": ("A 的火箭", "B 的火箭"),
+            "save_sites": ("A 的发射场", "B 的发射场"),
+            "save_spacecraft": ("A 的航天器", "B 的航天器"),
+            "save_flights": ("A 的任务", "B 的任务"),
+        }
+        for name, (mine, others) in expectations.items():
+            with self.subTest(url_name=name):
+                response = self.client.get(reverse(f"ops:{name}", args=[self.save_a.pk]))
+                self.assertContains(response, mine)
+                self.assertNotContains(response, others)
 
-    def test_workspace_shows_spacecraft_period(self):
+    def test_payloads_page_is_program_scoped(self):
+        Payload.objects.create(name="A 的载荷", program=self.save_a)
+        Payload.objects.create(name="B 的载荷", program=self.save_b)
+        response = self.client.get(reverse("ops:save_payloads", args=[self.save_a.pk]))
+        self.assertContains(response, "A 的载荷")
+        self.assertNotContains(response, "B 的载荷")
+
+    def test_spacecraft_page_shows_period_computed_live(self):
         # Kerbin 100 km 圆轨：sma = 700000（= 600 km 半径 + 100 km 高度）→ 1958.128 s
-        response = self.client.get(reverse("ops:workspace", args=[self.save_a.pk]))
+        response = self.client.get(reverse("ops:save_spacecraft", args=[self.save_a.pk]))
         self.assertContains(response, "1,958.1 s")
         self.assertContains(response, "0.0909 Kerbin 天")
 
-    def test_workspace_period_is_dash_when_not_computable(self):
-        Spacecraft.objects.create(name="没有轨道数据", program=self.save_a, body=self.body)
-        response = self.client.get(reverse("ops:workspace", args=[self.save_a.pk]))
+    def test_spacecraft_period_is_dash_when_not_computable(self):
+        Spacecraft.objects.create(name="A 的未知轨道", program=self.save_a, body=self.body)
+        response = self.client.get(reverse("ops:save_spacecraft", args=[self.save_a.pk]))
         rows = {row["obj"].name: row["period"] for row in response.context["spacecraft_rows"]}
-        self.assertEqual(rows["没有轨道数据"], "—")
+        self.assertEqual(rows["A 的未知轨道"], "—")
         self.assertNotEqual(rows["A 的航天器"], "—")
 
-    def test_workspace_result_text(self):
+    def test_flights_page_result_text(self):
         FlightLog.objects.create(
             name="失败任务", state=FlightState.FAILED, actual_date=date(2026, 1, 1),
             result_code=-1, rocket=self.rocket_a, site=self.site_a, program=self.save_a,
@@ -263,23 +287,51 @@ class WorkspaceTests(TestCase):
             name="三级失效任务", result_code=3,
             rocket=self.rocket_a, site=self.site_a, program=self.save_a,
         )
-        response = self.client.get(reverse("ops:workspace", args=[self.save_a.pk]))
+        response = self.client.get(reverse("ops:save_flights", args=[self.save_a.pk]))
         rows = {row["obj"].name: row["result"] for row in response.context["flight_rows"]}
         self.assertEqual(rows["失败任务"], "失败")
         self.assertEqual(rows["三级失效任务"], "第 3 级失效")
         self.assertEqual(rows["A 的任务"], "—")
 
-    def test_workspace_empty_states(self):
+    def test_each_page_has_its_own_empty_state(self):
         empty = Save.objects.create(name="空存档")
-        response = self.client.get(reverse("ops:workspace", args=[empty.pk]))
-        for expected in ("还没有火箭", "还没有载荷", "还没有发射场", "还没有航天器", "还没有发射日志"):
-            self.assertContains(response, expected)
+        expectations = {
+            "save_rockets": "还没有火箭",
+            "save_payloads": "还没有载荷",
+            "save_sites": "还没有发射场",
+            "save_spacecraft": "还没有航天器",
+            "save_flights": "还没有发射日志",
+        }
+        for name, text in expectations.items():
+            with self.subTest(url_name=name):
+                response = self.client.get(reverse(f"ops:{name}", args=[empty.pk]))
+                self.assertContains(response, text)
+
+    def test_each_page_has_exactly_one_table(self):
+        """拆页回归：一页只显示一张表（文档 11 §8.2）。"""
+        for name in (
+            "save_rockets", "save_payloads", "save_sites", "save_spacecraft", "save_flights",
+        ):
+            with self.subTest(url_name=name):
+                content = self.client.get(
+                    reverse(f"ops:{name}", args=[self.save_a.pk])
+                ).content.decode()
+                self.assertEqual(content.count("<table"), 1)
+
+    def test_rockets_page_does_not_show_other_sections(self):
+        response = self.client.get(reverse("ops:save_rockets", args=[self.save_a.pk]))
+        self.assertNotContains(response, "在轨航天器")
+
+    def test_unknown_save_is_404(self):
+        response = self.client.get(reverse("ops:save_rockets", args=[99999]))
+        self.assertEqual(response.status_code, 404)
 
     def test_no_admin_entry_anywhere(self):
         """文档 10 第 8.1 节：页面里没有「在后台编辑」按钮，导航里没有后台入口。"""
         for url in (
+            reverse("core:home"),
             reverse("core:save_list"),
-            reverse("ops:workspace", args=[self.save_a.pk]),
+            reverse("ops:save_rockets", args=[self.save_a.pk]),
             reverse("ops:schedule"),
             reverse("fleet:rocket_detail", args=[self.rocket_a.pk]),
         ):
@@ -342,7 +394,7 @@ class FlightLogCrudTests(TestCase):
         response = self.client.post(
             f"{reverse('ops:flight_create')}?save={self.save.pk}", self.payload(),
         )
-        self.assertRedirects(response, reverse("ops:workspace", args=[self.save.pk]))
+        self.assertRedirects(response, reverse("ops:save_flights", args=[self.save.pk]))
         self.assertEqual(FlightLog.objects.get(name="新任务").program_id, self.save.pk)
 
     def test_create_flight_invalid_state_date_shows_form_error(self):
@@ -363,7 +415,7 @@ class FlightLogCrudTests(TestCase):
             reverse("ops:flight_update", args=[flight.pk]),
             self.payload(name="改过的任务"),
         )
-        self.assertRedirects(response, reverse("ops:workspace", args=[self.save.pk]))
+        self.assertRedirects(response, reverse("ops:save_flights", args=[self.save.pk]))
         flight.refresh_from_db()
         self.assertEqual(flight.name, "改过的任务")
 
@@ -374,7 +426,7 @@ class FlightLogCrudTests(TestCase):
         response = self.client.post(
             reverse("ops:flight_delete", args=[flight.pk]), {"confirmed": "yes"},
         )
-        self.assertRedirects(response, reverse("ops:workspace", args=[self.save.pk]))
+        self.assertRedirects(response, reverse("ops:save_flights", args=[self.save.pk]))
         self.assertFalse(FlightLog.objects.filter(pk=flight.pk).exists())
 
 

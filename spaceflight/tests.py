@@ -130,7 +130,7 @@ class SpaceflightCrudTests(TestCase):
             {"name": "KSC", "body": self.body.pk, "latitude": "-0.1", "longitude": "74.6",
              "max_mass": "", "is_operational": "on", "note": ""},
         )
-        self.assertRedirects(response, reverse("ops:workspace", args=[self.save.pk]))
+        self.assertRedirects(response, reverse("ops:save_sites", args=[self.save.pk]))
         site = Site.objects.get(name="KSC")
         self.assertEqual(site.program_id, self.save.pk)
         self.assertTrue(site.is_operational)
@@ -154,7 +154,7 @@ class SpaceflightCrudTests(TestCase):
              "sma": "700000", "eccentricity": "0", "inclination": "0",
              "cached_period_sec": "", "source_flight": "", "note": ""},
         )
-        self.assertRedirects(response, reverse("ops:workspace", args=[self.save.pk]))
+        self.assertRedirects(response, reverse("ops:save_spacecraft", args=[self.save.pk]))
         craft = Spacecraft.objects.get(name="100 km 圆轨")
         self.assertEqual(craft.program_id, self.save.pk)
         self.assertEqual(craft.sma, 700000)
@@ -187,7 +187,7 @@ class SpaceflightCrudTests(TestCase):
              "sma": "", "eccentricity": "", "inclination": "",
              "cached_period_sec": "", "source_flight": "", "note": ""},
         )
-        self.assertRedirects(response, reverse("ops:workspace", args=[self.save.pk]))
+        self.assertRedirects(response, reverse("ops:save_spacecraft", args=[self.save.pk]))
         craft.refresh_from_db()
         self.assertEqual(craft.name, "改过的航天器")
         self.assertEqual(craft.craft_type, CraftType.STATION)
@@ -196,7 +196,7 @@ class SpaceflightCrudTests(TestCase):
         response = self.client.post(
             reverse("spaceflight:spacecraft_delete", args=[craft.pk]), {"confirmed": "yes"},
         )
-        self.assertRedirects(response, reverse("ops:workspace", args=[self.save.pk]))
+        self.assertRedirects(response, reverse("ops:save_spacecraft", args=[self.save.pk]))
         self.assertFalse(Spacecraft.objects.filter(pk=craft.pk).exists())
 
     def test_update_and_delete_site(self):

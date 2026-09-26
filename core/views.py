@@ -60,7 +60,12 @@ class FormPageMixin:
 
 
 class ScopedCreateView(FormPageMixin, CreateView):
-    """`/xxx/new/?save=<pk>`：`program` 从 URL 查询参数取，**不从表单取**（防篡改）。"""
+    """`/xxx/new/?save=<pk>`：`program` 从 URL 查询参数取，**不从表单取**（防篡改）。
+
+    `list_url_name` 由子类指定：保存/取消之后回到它所在的那张列表页（文档 11 §6.1）。
+    """
+
+    list_url_name = ""
 
     def dispatch(self, request, *args, **kwargs):
         save_id = request.GET.get("save", "")
@@ -74,7 +79,7 @@ class ScopedCreateView(FormPageMixin, CreateView):
         return {**super().get_form_kwargs(), "program": self.program}
 
     def get_source_url(self):
-        return reverse("ops:workspace", args=[self.program.pk])
+        return reverse(self.list_url_name, args=[self.program.pk])
 
     def get_success_url(self):
         messages.success(self.request, f"已新增：{self.object}")
@@ -84,8 +89,10 @@ class ScopedCreateView(FormPageMixin, CreateView):
 class ScopedUpdateView(FormPageMixin, UpdateView):
     """编辑属于某个存档的记录：`program` 取自实例，不从表单取。"""
 
+    list_url_name = ""
+
     def get_source_url(self):
-        return reverse("ops:workspace", args=[self.object.program_id])
+        return reverse(self.list_url_name, args=[self.object.program_id])
 
     def get_success_url(self):
         messages.success(self.request, "已保存。")
@@ -136,10 +143,12 @@ class SafeDeleteMixin:
 
 
 class ScopedDeleteView(SafeDeleteMixin, DeleteView):
-    """删除属于某个存档的记录，删完回到该存档的工作台。"""
+    """删除属于某个存档的记录，删完回到该类数据的列表页（由 `list_url_name` 指定）。"""
+
+    list_url_name = ""
 
     def get_source_url(self):
-        return reverse("ops:workspace", args=[self.object.program_id])
+        return reverse(self.list_url_name, args=[self.object.program_id])
 
 
 class SaveScopedListView(ListView):
