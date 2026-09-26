@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{# 参考数据模块的二级导航骨架（文档 11 第 3.4 节）。四个列表页都继承本模板。 #}
+{% block subnav %}
+<div class="bg-white border-bottom">
+  <div class="container-fluid px-4">
+    <ul class="nav nav-pills py-2 gap-1">
+      <li class="nav-item">
+        <a class="nav-link {% if request.resolver_match.url_name == 'engine_list' %}active{% endif %}"
+           href="{% url 'parts:engine_list' %}">引擎</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link {% if request.resolver_match.url_name == 'fueltank_list' %}active{% endif %}"
+           href="{% url 'parts:fueltank_list' %}">燃料罐</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link {% if request.resolver_match.url_name == 'instrument_list' %}active{% endif %}"
+           href="{% url 'parts:instrument_list' %}">科学设备</a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link {% if request.resolver_match.url_name == 'body_list' %}active{% endif %}"
+           href="{% url 'parts:body_list' %}">天体</a>
+      </li>
+    </ul>
+  </div>
+</div>
+{% endblock %}

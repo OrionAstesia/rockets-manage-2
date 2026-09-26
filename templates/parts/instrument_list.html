@@ -1,0 +1,47 @@
+{% extends "parts/reference_base.html" %}
+
+{% block title %}科学设备 · 参考数据{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <span class="text-muted small">共 {{ instruments|length }} 个科学设备</span>
+  <a class="btn btn-sm btn-primary" href="{% url 'parts:instrument_create' %}">+ 新增</a>
+</div>
+<div class="table-responsive">
+  <table class="table table-sm table-striped align-middle">
+    <thead class="table-light">
+      <tr>
+        <th>名称</th>
+        <th class="text-end">干重 (t)</th>
+        <th>实验类型</th>
+        <th class="text-end">数据量 (Mits)</th>
+        <th>可重复使用</th>
+        <th>需要乘员</th>
+        <th class="text-end">造价 (√)</th>
+        <th class="text-end">操作</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for instrument in instruments %}
+      <tr>
+        <td>{{ instrument.name }}</td>
+        <td class="text-end">{{ instrument.dry_mass }}</td>
+        <td>{{ instrument.experiment_type|default:"—" }}</td>
+        <td class="text-end">{{ instrument.data_value }}</td>
+        <td>{{ instrument.is_repeatable|yesno:"是,否" }}</td>
+        <td>{{ instrument.requires_crew|yesno:"是,否" }}</td>
+        <td class="text-end">{{ instrument.cost }}</td>
+        <td class="text-end text-nowrap">
+          <a class="btn btn-sm btn-outline-secondary" href="{% url 'parts:instrument_update' instrument.pk %}">编辑</a>
+          <form class="d-inline" method="post" action="{% url 'parts:instrument_delete' instrument.pk %}">
+            {% csrf_token %}<button type="submit" class="btn btn-sm btn-outline-danger">删除</button>
+          </form>
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="8" class="text-muted">还没有科学设备。点「+ 新增」录入一个。</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

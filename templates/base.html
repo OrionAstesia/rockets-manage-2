@@ -30,7 +30,7 @@
       </li>
       <li class="nav-item">
         <a class="nav-link text-white {% if request.resolver_match.namespace == 'parts' %}active{% endif %}"
-           href="{% url 'parts:reference' %}">参考数据</a>
+           href="{% url 'parts:engine_list' %}">参考数据</a>
       </li>
       <li class="nav-item">
         <a class="nav-link text-white {% if request.resolver_match.url_name == 'schedule' %}active{% endif %}"

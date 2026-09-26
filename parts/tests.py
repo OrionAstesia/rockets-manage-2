@@ -53,8 +53,8 @@ class PartsModelTests(TestCase):
         self.assertEqual([t.name for t in FuelTank.objects.all()], ["A 罐", "B 罐"])
 
 
-class ReferencePageTests(TestCase):
-    """改造文档 10 第 4.4 / 8.2 节：`/reference/` 三个可编辑区块 + 只读天体。"""
+class ReferenceListPagesTests(TestCase):
+    """文档 11 第 4.3 / 7.1 节：参考数据拆成四页，各自计数、各自只读规则。"""
 
     def setUp(self):
         Body.objects.create(name="Kerbin", mu=3.5316e12, radius=600000, has_atmosphere=True)
@@ -63,18 +63,40 @@ class ReferencePageTests(TestCase):
         FuelTank.objects.create(name="燃料罐 A", capacity=800)
         ScienceInstrument.objects.create(name="温度计", dry_mass=0.005, data_value=8)
 
-    def test_page_renders_with_group_counts(self):
-        response = self.client.get(reverse("parts:reference"))
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "共 2 个引擎")
-        self.assertContains(response, "共 1 个燃料罐")
-        self.assertContains(response, "共 1 个科学设备")
-        self.assertContains(response, "共 1 个（只读）")
+    def test_four_pages_render_with_their_own_count(self):
+        expectations = {
+            "parts:engine_list": "共 2 个引擎",
+            "parts:fueltank_list": "共 1 个燃料罐",
+            "parts:instrument_list": "共 1 个科学设备",
+            "parts:body_list": "共 1 个天体",
+        }
+        for name, text in expectations.items():
+            with self.subTest(url_name=name):
+                response = self.client.get(reverse(name))
+                self.assertEqual(response.status_code, 200)
+                self.assertContains(response, text)
 
-    def test_bodies_are_read_only(self):
-        content = self.client.get(reverse("parts:reference")).content.decode()
-        self.assertIn("Kerbin", content)
-        self.assertNotIn("/bodies/", content)          # 天体没有编辑/删除入口
+    def test_each_page_has_exactly_one_table(self):
+        """拆页回归：一页只显示一张表。"""
+        for name in (
+            "parts:engine_list", "parts:fueltank_list",
+            "parts:instrument_list", "parts:body_list",
+        ):
+            with self.subTest(url_name=name):
+                content = self.client.get(reverse(name)).content.decode()
+                self.assertEqual(content.count("<table"), 1)
+
+    def test_bodies_page_is_read_only(self):
+        response = self.client.get(reverse("parts:body_list"))
+        self.assertContains(response, "Kerbin")
+        self.assertNotContains(response, "+ 新增")
+        self.assertNotContains(response, ">操作<")
+        self.assertNotContains(response, "bodies/new")     # 天体没有任何 CRUD 路由
+
+    def test_old_reference_url_redirects_to_engines(self):
+        response = self.client.get(reverse("parts:reference"))
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.headers["Location"], reverse("parts:engine_list"))
 
     def test_engine_crud(self):
         response = self.client.post(
@@ -85,7 +107,7 @@ class ReferencePageTests(TestCase):
                 "isp_vac": "350", "cost": "1500",
             },
         )
-        self.assertRedirects(response, reverse("parts:reference"))
+        self.assertRedirects(response, reverse("parts:engine_list"))
         engine = Engine.objects.get(name="新引擎")
         self.assertEqual(engine.isp_vac, 350)
 
@@ -97,6 +119,7 @@ class ReferencePageTests(TestCase):
                 "isp_vac": "355", "cost": "1500",
             },
         )
+        self.assertRedirects(response, reverse("parts:engine_list"))
         engine.refresh_from_db()
         self.assertEqual(engine.name, "改过的引擎")
         self.assertEqual(engine.isp_vac, 355)
@@ -104,7 +127,7 @@ class ReferencePageTests(TestCase):
         response = self.client.post(
             reverse("parts:engine_delete", args=[engine.pk]), {"confirmed": "yes"},
         )
-        self.assertRedirects(response, reverse("parts:reference"))
+        self.assertRedirects(response, reverse("parts:engine_list"))
         self.assertFalse(Engine.objects.filter(pk=engine.pk).exists())
 
     def test_fueltank_and_instrument_crud(self):
@@ -113,7 +136,7 @@ class ReferencePageTests(TestCase):
             {"name": "新罐", "diameter": "1.25", "dry_mass": "0.25", "capacity": "400",
              "fuel_type": "XENON", "cost": "300"},
         )
-        self.assertRedirects(response, reverse("parts:reference"))
+        self.assertRedirects(response, reverse("parts:fueltank_list"))
         self.assertEqual(FuelTank.objects.get(name="新罐").fuel_type, FuelType.XENON)
 
         response = self.client.post(
@@ -121,13 +144,20 @@ class ReferencePageTests(TestCase):
             {"name": "新设备", "dry_mass": "0.02", "experiment_type": "重力",
              "data_value": "12", "is_repeatable": "on", "requires_crew": "", "cost": "500"},
         )
-        self.assertRedirects(response, reverse("parts:reference"))
+        self.assertRedirects(response, reverse("parts:instrument_list"))
         instrument = ScienceInstrument.objects.get(name="新设备")
         self.assertTrue(instrument.is_repeatable)
         self.assertFalse(instrument.requires_crew)
 
-        self.client.post(reverse("parts:fueltank_delete", args=[FuelTank.objects.get(name="新罐").pk]), {"confirmed": "yes"})
-        self.client.post(reverse("parts:instrument_delete", args=[instrument.pk]), {"confirmed": "yes"})
+        response = self.client.post(
+            reverse("parts:fueltank_delete", args=[FuelTank.objects.get(name="新罐").pk]),
+            {"confirmed": "yes"},
+        )
+        self.assertRedirects(response, reverse("parts:fueltank_list"))
+        response = self.client.post(
+            reverse("parts:instrument_delete", args=[instrument.pk]), {"confirmed": "yes"},
+        )
+        self.assertRedirects(response, reverse("parts:instrument_list"))
         self.assertFalse(FuelTank.objects.filter(name="新罐").exists())
         self.assertFalse(ScienceInstrument.objects.filter(pk=instrument.pk).exists())
 
@@ -143,7 +173,13 @@ class ReferencePageTests(TestCase):
         self.assertTrue(Engine.objects.filter(pk=engine.pk).exists())
         self.assertContains(response, "删除失败")
 
-    def test_reference_page_has_no_admin_link(self):
-        content = self.client.get(reverse("parts:reference")).content.decode()
-        self.assertNotIn("/admin/", content)
+    def test_reference_pages_have_no_admin_link(self):
+        for name in (
+            "parts:engine_list", "parts:fueltank_list",
+            "parts:instrument_list", "parts:body_list",
+        ):
+            with self.subTest(url_name=name):
+                content = self.client.get(reverse(name)).content.decode()
+                self.assertNotIn("/admin/", content)
+
 
