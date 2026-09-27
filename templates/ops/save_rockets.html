@@ -3,23 +3,12 @@
 {% block title %}{{ save.name }} · 火箭{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-end mb-3">
-  <div>
-    <h1 class="h4 mb-0">{{ save.name }}</h1>
-    <div class="text-muted small">{{ save.get_game_mode_display }} · 开始日期 {{ save.start_date|default_if_none:"—" }}</div>
-  </div>
-  <div class="text-nowrap">
-    <a class="btn btn-sm btn-outline-secondary" href="{% url 'core:save_update' save.pk %}">编辑存档</a>
-    <form class="d-inline" method="post" action="{% url 'core:save_delete' save.pk %}">
-      {% csrf_token %}<button type="submit" class="btn btn-sm btn-outline-danger">删除存档</button>
-    </form>
-  </div>
+<div class="mb-3">
+  <h1 class="h4 mb-0">{{ save.name }}</h1>
+  <div class="text-muted small">{{ save.get_game_mode_display }} · 开始日期 {{ save.start_date|default_if_none:"—" }}</div>
 </div>
 
-<div class="d-flex justify-content-between align-items-center mb-2">
-  <span class="text-muted small">共 {{ rockets|length }} 枚火箭</span>
-  <a class="btn btn-sm btn-primary" href="{% url 'fleet:rocket_create' %}?save={{ save.pk }}">+ 新增</a>
-</div>
+<p class="text-muted small">共 {{ rockets|length }} 枚火箭</p>
 <div class="table-responsive">
   <table class="table table-sm table-striped align-middle">
     <thead class="table-light">
@@ -33,25 +22,29 @@
       </tr>
     </thead>
     <tbody>
-      {% for rocket in rockets %}
+      {% for row in rows %}
       <tr>
-        <td><a href="{% url 'fleet:rocket_detail' rocket.pk %}">{{ rocket.name }}</a></td>
-        <td>{{ rocket.series|default:"—" }}</td>
-        <td class="text-end">{{ rocket.diameter|default_if_none:"—" }}</td>
-        <td class="text-end">{{ rocket.crew_capacity }}</td>
-        <td class="text-end">{{ rocket.stage_total }}</td>
-        <td>{{ rocket.first_flight_date|default_if_none:"—" }}</td>
+        <td><a href="{% url 'fleet:rocket_detail' row.obj.pk %}">{{ row.obj.name }}</a></td>
+        <td>{{ row.obj.series|default:"—" }}</td>
+        <td class="text-end">{{ row.obj.diameter|default_if_none:"—" }}</td>
+        <td class="text-end">{{ row.obj.crew_capacity }}</td>
+        <td class="text-end">{{ row.obj.stage_total }}</td>
+        <td>{{ row.obj.first_flight_date|default_if_none:"—" }}</td>
         <td class="text-end text-nowrap">
-          <a class="btn btn-sm btn-outline-secondary" href="{% url 'fleet:rocket_update' rocket.pk %}">编辑</a>
-          <form class="d-inline" method="post" action="{% url 'fleet:rocket_delete' rocket.pk %}">
-            {% csrf_token %}<button type="submit" class="btn btn-sm btn-outline-danger">删除</button>
-          </form>
+          <button type="button" class="btn btn-sm btn-outline-secondary" data-open-dialog="{{ row.edit_id }}">编辑</button>
+          <button type="button" class="btn btn-sm btn-outline-danger" data-open-dialog="{{ row.del_id }}">删除</button>
         </td>
       </tr>
       {% empty %}
-      <tr><td colspan="7" class="text-muted">这个存档还没有火箭。点右上角「+ 新增」添加一枚。</td></tr>
+      <tr><td colspan="7" class="text-muted">这个存档还没有火箭。点右下角的 <strong>+</strong> 添加一枚。</td></tr>
       {% endfor %}
     </tbody>
   </table>
 </div>
+
+{% include "includes/_dialog.html" with dialog_id="dlg-new" title="新增火箭" action="create" form=new_form prefix="new" is_open=open_new %}
+{% for row in rows %}
+  {% include "includes/_dialog.html" with dialog_id=row.edit_id title=row.obj.name action="update" form=row.form pk=row.obj.pk prefix=row.prefix is_open=row.open_edit %}
+  {% include "includes/_dialog.html" with dialog_id=row.del_id title="删除火箭" action="delete" pk=row.obj.pk confirm_text="确定删除这枚火箭？它的级会一并删除。此操作不可恢复。" danger=True %}
+{% endfor %}
 {% endblock %}

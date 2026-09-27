@@ -191,50 +191,43 @@ class RocketDetailViewTests(ThreeStageRocketMixin, TestCase):
         self.assertContains(response, "不含载荷质量")
 
 
-class ProgramScopedFormTests(TestCase):
-    """改造文档 10 第 8.2 节：program 不进表单、从 URL 注入、缺失要被拦下。"""
+class SaveScopedDialogTests(TestCase):
+    """火箭与载荷的弹窗增删改：POST 回存档的列表页，靠 action 分流（文档 12 第 4 / 8 节）。"""
 
     def setUp(self):
         self.save = Save.objects.create(name="生涯存档")
+        self.other = Save.objects.create(name="另一个存档")
+        self.rockets_url = reverse("ops:save_rockets", args=[self.save.pk])
+        self.payloads_url = reverse("ops:save_payloads", args=[self.save.pk])
+
+    def rocket_payload(self, prefix="new", **overrides):
+        """带前缀的表单字段（和浏览器提交的一致）。"""
+        data = {
+            "name": "新火箭", "series": "K", "manufacturer": "", "diameter": "1.25",
+            "first_flight_date": "", "crew_capacity": "0", "cost": "100", "note": "",
+        }
+        data.update(overrides)
+        return {f"{prefix}-{key}": value for key, value in data.items()}
 
     def test_forms_do_not_expose_program(self):
         self.assertNotIn("program", RocketForm().fields)
         self.assertNotIn("program", PayloadForm().fields)
 
-    def test_create_rocket_with_save_param(self):
+    def test_create_rocket_from_dialog(self):
         response = self.client.post(
-            f"{reverse('fleet:rocket_create')}?save={self.save.pk}",
-            {
-                "name": "新火箭", "series": "K", "manufacturer": "", "diameter": "1.25",
-                "first_flight_date": "", "crew_capacity": "0", "cost": "100", "note": "",
-            },
+            self.rockets_url, {"action": "create", "prefix": "new", **self.rocket_payload()},
         )
-        self.assertRedirects(response, reverse("ops:save_rockets", args=[self.save.pk]))
-        rocket = Rocket.objects.get(name="新火箭")
-        self.assertEqual(rocket.program_id, self.save.pk)
-
-    def test_create_without_save_param_is_rejected(self):
-        response = self.client.post(reverse("fleet:rocket_create"), {"name": "不该被创建"})
-        self.assertRedirects(response, reverse("core:save_list"))
-        self.assertFalse(Rocket.objects.exists())
-
-    def test_create_with_bogus_save_param_is_rejected(self):
-        response = self.client.post(
-            f"{reverse('fleet:rocket_create')}?save=abc", {"name": "不该被创建"}
-        )
-        self.assertRedirects(response, reverse("core:save_list"))
-        self.assertFalse(Rocket.objects.exists())
+        self.assertRedirects(response, self.rockets_url)
+        self.assertEqual(Rocket.objects.get(name="新火箭").program_id, self.save.pk)
 
     def test_update_cannot_move_object_to_another_program(self):
-        """program 从实例取：即使提交里塞了别的存档，也改不走。"""
+        """program 取自实例：即使提交里塞了别的存档，也改不走。"""
         rocket = Rocket.objects.create(name="火箭", program=self.save)
-        other = Save.objects.create(name="另一个存档")
         response = self.client.post(
-            reverse("fleet:rocket_update", args=[rocket.pk]),
+            self.rockets_url,
             {
-                "name": "改名了", "series": "", "manufacturer": "", "diameter": "",
-                "first_flight_date": "", "crew_capacity": "0", "cost": "0", "note": "",
-                "program": other.pk,
+                "action": "update", "pk": rocket.pk, "prefix": f"e{rocket.pk}",
+                **self.rocket_payload(prefix=f"e{rocket.pk}", name="改名了", program=self.other.pk),
             },
         )
         self.assertEqual(response.status_code, 302)
@@ -249,12 +242,12 @@ class ProgramScopedFormTests(TestCase):
         rocket.save()
         self.assertEqual(Rocket.objects.get(pk=rocket.pk).series, "改一下")
 
-    def test_delete_rocket_redirects_to_rocket_list(self):
+    def test_delete_rocket_from_dialog(self):
         rocket = Rocket.objects.create(name="要删的火箭", program=self.save)
         response = self.client.post(
-            reverse("fleet:rocket_delete", args=[rocket.pk]), {"confirmed": "yes"},
+            self.rockets_url, {"action": "delete", "pk": rocket.pk, "confirmed": "yes"},
         )
-        self.assertRedirects(response, reverse("ops:save_rockets", args=[self.save.pk]))
+        self.assertRedirects(response, self.rockets_url)
         self.assertFalse(Rocket.objects.filter(pk=rocket.pk).exists())
 
     def test_delete_rocket_blocked_when_it_has_flights(self):
@@ -264,65 +257,62 @@ class ProgramScopedFormTests(TestCase):
         site = Site.objects.create(name="发射场", program=self.save, body=body)
         FlightLog.objects.create(name="任务", rocket=rocket, site=site, program=self.save)
         response = self.client.post(
-            reverse("fleet:rocket_delete", args=[rocket.pk]), {"confirmed": "yes"}, follow=True,
+            self.rockets_url, {"action": "delete", "pk": rocket.pk, "confirmed": "yes"},
+            follow=True,
         )
         self.assertTrue(Rocket.objects.filter(pk=rocket.pk).exists())
         self.assertContains(response, "删除失败")
 
-    def test_delete_confirm_page_mentions_stage_count(self):
-        rocket = Rocket.objects.create(name="三级火箭", program=self.save)
-        for order in (1, 2, 3):
-            RocketStage.objects.create(rocket=rocket, stage_order=order, structure_mass=0.1)
-        response = self.client.get(reverse("fleet:rocket_delete", args=[rocket.pk]))
-        self.assertContains(response, "这枚火箭的 3 级将一并删除")
+    def test_rockets_page_delete_dialog_mentions_stages(self):
+        Rocket.objects.create(name="三级火箭", program=self.save)
+        content = self.client.get(self.rockets_url).content.decode()
+        self.assertIn("它的级会一并删除", content)
 
-    def test_payload_crud(self):
+    def test_payload_crud_from_dialogs(self):
         response = self.client.post(
-            f"{reverse('fleet:payload_create')}?save={self.save.pk}",
+            self.payloads_url,
             {
-                "name": "新载荷", "payload_type": "PROBE", "mass": "0.5", "diameter": "",
-                "crew_capacity": "0", "cost": "0", "note": "",
+                "action": "create", "prefix": "new",
+                "new-name": "新载荷", "new-payload_type": "PROBE", "new-mass": "0.5",
+                "new-diameter": "", "new-crew_capacity": "0", "new-cost": "0", "new-note": "",
             },
         )
-        self.assertRedirects(response, reverse("ops:save_payloads", args=[self.save.pk]))
+        self.assertRedirects(response, self.payloads_url)
         payload = Payload.objects.get(name="新载荷")
         self.assertEqual(payload.program_id, self.save.pk)
 
         response = self.client.post(
-            reverse("fleet:payload_delete", args=[payload.pk]), {"confirmed": "yes"},
+            self.payloads_url, {"action": "delete", "pk": payload.pk, "confirmed": "yes"},
         )
+        self.assertRedirects(response, self.payloads_url)
         self.assertFalse(Payload.objects.exists())
 
 
-class StageCrudTests(TestCase):
-    """改造文档 10 第 5.5 / 8.2 节：级的新增、编辑、删除与序号重复提示。"""
+class StageDialogTests(TestCase):
+    """级的弹窗增删改：POST 回火箭详情页，归属按 rocket 校验（文档 12 第 5.3 / 8 节）。"""
 
     def setUp(self):
         self.save = Save.objects.create(name="生涯存档")
         self.rocket = Rocket.objects.create(name="测试火箭", program=self.save)
         self.engine = Engine.objects.create(name="引擎", dry_mass=1.0, isp_asl=300, isp_vac=345)
         self.tank = FuelTank.objects.create(name="燃料罐", dry_mass=0.5, capacity=800)
+        self.url = reverse("fleet:rocket_detail", args=[self.rocket.pk])
 
-    def stage_payload(self, order=1, **overrides):
+    def stage_payload(self, prefix="new", order=1, **overrides):
         data = {
             "stage_order": str(order), "engine": self.engine.pk, "engine_count": "1",
             "fuel_tank": self.tank.pk, "tank_count": "1", "structure_mass": "0.2",
             "separation_type": "STACK", "note": "",
         }
         data.update(overrides)
-        return data
+        return {f"{prefix}-{key}": value for key, value in data.items()}
 
-    def test_create_stage_takes_rocket_from_url(self):
+    def test_create_stage_from_dialog(self):
         response = self.client.post(
-            f"{reverse('fleet:stage_create')}?rocket={self.rocket.pk}", self.stage_payload(1),
+            self.url, {"action": "create", "prefix": "new", **self.stage_payload(order=1)},
         )
-        self.assertRedirects(response, reverse("fleet:rocket_detail", args=[self.rocket.pk]))
+        self.assertRedirects(response, self.url)
         self.assertEqual(RocketStage.objects.get(rocket=self.rocket).stage_order, 1)
-
-    def test_create_stage_without_rocket_param_is_rejected(self):
-        response = self.client.post(reverse("fleet:stage_create"), self.stage_payload(1))
-        self.assertRedirects(response, reverse("core:save_list"))
-        self.assertFalse(RocketStage.objects.exists())
 
     def test_form_suggests_next_stage_order(self):
         RocketStage.objects.create(rocket=self.rocket, stage_order=1, structure_mass=0.1)
@@ -332,22 +322,25 @@ class StageCrudTests(TestCase):
     def test_first_stage_suggestion_starts_at_one(self):
         self.assertEqual(StageForm(rocket=self.rocket).initial["stage_order"], 1)
 
-    def test_duplicate_stage_order_shows_chinese_error(self):
-        """重复序号要给中文提示，而不是 IntegrityError 500。"""
+    def test_duplicate_stage_order_reopens_dialog_with_chinese_error(self):
+        """重复序号要给中文提示并让弹窗重新打开，而不是 IntegrityError 500。"""
         RocketStage.objects.create(rocket=self.rocket, stage_order=1, structure_mass=0.1)
         response = self.client.post(
-            f"{reverse('fleet:stage_create')}?rocket={self.rocket.pk}", self.stage_payload(1),
+            self.url, {"action": "create", "prefix": "new", **self.stage_payload(order=1)},
         )
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "这枚火箭已经有第 1 级了")
+        self.assertContains(response, 'data-open="1"')
         self.assertEqual(RocketStage.objects.count(), 1)
 
-    def test_update_stage(self):
+    def test_update_stage_from_dialog(self):
         stage = RocketStage.objects.create(rocket=self.rocket, stage_order=1, structure_mass=0.1)
         response = self.client.post(
-            reverse("fleet:stage_update", args=[stage.pk]), self.stage_payload(2),
+            self.url,
+            {"action": "update", "pk": stage.pk, "prefix": f"e{stage.pk}",
+             **self.stage_payload(prefix=f"e{stage.pk}", order=2)},
         )
-        self.assertRedirects(response, reverse("fleet:rocket_detail", args=[self.rocket.pk]))
+        self.assertRedirects(response, self.url)
         stage.refresh_from_db()
         self.assertEqual(stage.stage_order, 2)
 
@@ -355,24 +348,27 @@ class StageCrudTests(TestCase):
         """唯一性校验必须排除自身，否则原样保存就会报错。"""
         stage = RocketStage.objects.create(rocket=self.rocket, stage_order=1, structure_mass=0.1)
         response = self.client.post(
-            reverse("fleet:stage_update", args=[stage.pk]), self.stage_payload(1),
+            self.url,
+            {"action": "update", "pk": stage.pk, "prefix": f"e{stage.pk}",
+             **self.stage_payload(prefix=f"e{stage.pk}", order=1)},
         )
-        self.assertRedirects(response, reverse("fleet:rocket_detail", args=[self.rocket.pk]))
+        self.assertRedirects(response, self.url)
 
-    def test_delete_stage(self):
+    def test_delete_stage_from_dialog(self):
         stage = RocketStage.objects.create(rocket=self.rocket, stage_order=1, structure_mass=0.1)
         response = self.client.post(
-            reverse("fleet:stage_delete", args=[stage.pk]), {"confirmed": "yes"},
+            self.url, {"action": "delete", "pk": stage.pk, "confirmed": "yes"},
         )
-        self.assertRedirects(response, reverse("fleet:rocket_detail", args=[self.rocket.pk]))
+        self.assertRedirects(response, self.url)
         self.assertFalse(RocketStage.objects.exists())
 
-    def test_detail_page_has_stage_entries(self):
+    def test_detail_page_has_stage_dialogs(self):
         stage = RocketStage.objects.create(rocket=self.rocket, stage_order=1, structure_mass=0.1)
-        response = self.client.get(reverse("fleet:rocket_detail", args=[self.rocket.pk]))
-        self.assertContains(response, f"{reverse('fleet:stage_create')}?rocket={self.rocket.pk}")
-        self.assertContains(response, reverse("fleet:stage_update", args=[stage.pk]))
-        self.assertContains(response, reverse("fleet:stage_delete", args=[stage.pk]))
+        content = self.client.get(self.url).content.decode()
+        self.assertIn('id="dlg-new"', content)
+        self.assertIn(f'data-open-dialog="dlg-edit-{stage.pk}"', content)
+        self.assertIn(f'data-open-dialog="dlg-del-{stage.pk}"', content)
+
 
 
 class RocketDetailProgramTests(TestCase):

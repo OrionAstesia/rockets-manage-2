@@ -1,6 +1,7 @@
 {# 通用弹窗骨架（文档 12 第 6.1 节）：所有增删改弹窗都 include 这一个文件。 #}
 {# 参数：dialog_id / title / action 必填；form 用于 create·update；pk 用于 update·delete； #}
-{#       is_open 服务端校验失败时传 True；confirm_text 删除时的提示；danger 删除时把主按钮变红。 #}
+{#       is_open 服务端校验失败时传 True；prefix 增/改表单的前缀；confirm_text 删除时的提示； #}
+{#       danger 删除时把主按钮变红。 #}
 <dialog class="modal" id="{{ dialog_id }}"{% if is_open %} data-open="1"{% endif %}>
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
@@ -8,6 +9,7 @@
         {% csrf_token %}
         <input type="hidden" name="action" value="{{ action }}">
         {% if pk %}<input type="hidden" name="pk" value="{{ pk }}">{% endif %}
+        {% if prefix %}<input type="hidden" name="prefix" value="{{ prefix }}">{% endif %}
         {% if action == "delete" %}<input type="hidden" name="confirmed" value="yes">{% endif %}
 
         <div class="modal-header">

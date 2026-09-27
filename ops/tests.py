@@ -281,7 +281,7 @@ class SaveListPagesTests(TestCase):
     def test_spacecraft_period_is_dash_when_not_computable(self):
         Spacecraft.objects.create(name="A 的未知轨道", program=self.save_a, body=self.body)
         response = self.client.get(reverse("ops:save_spacecraft", args=[self.save_a.pk]))
-        rows = {row["obj"].name: row["period"] for row in response.context["spacecraft_rows"]}
+        rows = {row["obj"].name: row["period"] for row in response.context["rows"]}
         self.assertEqual(rows["A 的未知轨道"], "—")
         self.assertNotEqual(rows["A 的航天器"], "—")
 
@@ -295,7 +295,7 @@ class SaveListPagesTests(TestCase):
             rocket=self.rocket_a, site=self.site_a, program=self.save_a,
         )
         response = self.client.get(reverse("ops:save_flights", args=[self.save_a.pk]))
-        rows = {row["obj"].name: row["result"] for row in response.context["flight_rows"]}
+        rows = {row["obj"].name: row["result"] for row in response.context["rows"]}
         self.assertEqual(rows["失败任务"], "失败")
         self.assertEqual(rows["三级失效任务"], "第 3 级失效")
         self.assertEqual(rows["A 的任务"], "—")
@@ -371,7 +371,7 @@ class SaveListPagesTests(TestCase):
 
 
 class FlightLogCrudTests(TestCase):
-    """发射日志的新增/编辑/删除：program 从 URL 来，外键下拉限制在本存档内。"""
+    """发射日志的弹窗增删改：POST 回列表页，靠 action 分流（文档 12 第 4 / 8 节）。"""
 
     def setUp(self):
         self.save = Save.objects.create(name="生涯存档")
@@ -380,37 +380,33 @@ class FlightLogCrudTests(TestCase):
         self.rocket = Rocket.objects.create(name="本存档火箭", program=self.save)
         self.other_rocket = Rocket.objects.create(name="别人家的火箭", program=self.other)
         self.site = Site.objects.create(name="本存档发射场", program=self.save, body=self.body)
+        self.url = reverse("ops:save_flights", args=[self.save.pk])
 
-    def test_all_five_new_pages_render_without_program_field(self):
-        """五个新建页都能打开，且都不显示「所属存档」字段（文档 10 第 8.2 节）。"""
-        urls = [
-            reverse("fleet:rocket_create"),
-            reverse("fleet:payload_create"),
-            reverse("spaceflight:site_create"),
-            reverse("spaceflight:spacecraft_create"),
-            reverse("ops:flight_create"),
-        ]
-        for url in urls:
-            with self.subTest(url=url):
-                response = self.client.get(f"{url}?save={self.save.pk}")
-                self.assertEqual(response.status_code, 200)
-                self.assertNotContains(response, "所属存档")
-
-    def test_date_inputs_render_as_native_date_type(self):
-        response = self.client.get(f"{reverse('ops:flight_create')}?save={self.save.pk}")
-        html = response.content.decode()
-        # planned_date / actual_date 两个日期字段；input_type 只能是 date，不能是 text
-        self.assertEqual(html.count('type="date"'), 2)
-        self.assertNotIn('type="text" name="planned_date"', html)
-
-    def payload(self, **overrides):
+    def payload(self, prefix="new", **overrides):
+        """按带前缀的表单字段名组装 POST 数据（和浏览器提交的一致）。"""
         data = {
             "name": "新任务", "state": FlightState.PLANNED, "planned_date": "2026-11-01",
             "actual_date": "", "rocket": self.rocket.pk, "payload": "", "site": self.site.pk,
             "crew_count": "0", "result_code": "", "rest_dv": "", "cost": "0", "detail": "",
         }
         data.update(overrides)
-        return data
+        return {f"{prefix}-{key}": value for key, value in data.items()}
+
+    def test_all_five_list_pages_render_without_program_field(self):
+        """五个列表页都带弹窗，且弹窗里没有「所属存档」字段（program 由页面带）。"""
+        for name in (
+            "save_rockets", "save_payloads", "save_sites", "save_spacecraft", "save_flights",
+        ):
+            with self.subTest(url_name=name):
+                response = self.client.get(reverse(f"ops:{name}", args=[self.save.pk]))
+                self.assertEqual(response.status_code, 200)
+                self.assertNotContains(response, "所属存档")
+
+    def test_date_inputs_render_as_native_date_type(self):
+        html = self.client.get(self.url).content.decode()
+        # 空列表页只有「新增」弹窗，里面是 planned_date / actual_date 两个日期字段
+        self.assertEqual(html.count('type="date"'), 2)
+        self.assertNotIn('type="text" name="new-planned_date"', html)
 
     def test_form_has_no_program_field(self):
         self.assertNotIn("program", FlightLogForm().fields)
@@ -420,43 +416,47 @@ class FlightLogCrudTests(TestCase):
         self.assertIn(self.rocket, form.fields["rocket"].queryset)
         self.assertNotIn(self.other_rocket, form.fields["rocket"].queryset)
 
-    def test_create_flight_takes_program_from_url(self):
+    def test_create_flight_from_dialog(self):
         response = self.client.post(
-            f"{reverse('ops:flight_create')}?save={self.save.pk}", self.payload(),
+            self.url, {"action": "create", "prefix": "new", **self.payload()},
         )
-        self.assertRedirects(response, reverse("ops:save_flights", args=[self.save.pk]))
+        self.assertRedirects(response, self.url)
         self.assertEqual(FlightLog.objects.get(name="新任务").program_id, self.save.pk)
 
-    def test_create_flight_invalid_state_date_shows_form_error(self):
-        """模型 clean() 的规则要能显示在表单上，而不是 500。"""
+    def test_create_flight_invalid_state_date_reopens_dialog(self):
+        """模型 clean() 的规则要显示在弹窗里（200 + data-open），而不是 500 / 302。"""
         response = self.client.post(
-            f"{reverse('ops:flight_create')}?save={self.save.pk}",
-            self.payload(state=FlightState.LAUNCHED, actual_date=""),
+            self.url,
+            {"action": "create", "prefix": "new",
+             **self.payload(state=FlightState.LAUNCHED, actual_date="")},
         )
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "必须填写实际发射日期")
+        self.assertContains(response, 'data-open="1"')
         self.assertFalse(FlightLog.objects.exists())
 
-    def test_update_flight(self):
+    def test_update_flight_from_dialog(self):
         flight = FlightLog.objects.create(
             name="旧任务", rocket=self.rocket, site=self.site, program=self.save,
         )
         response = self.client.post(
-            reverse("ops:flight_update", args=[flight.pk]),
-            self.payload(name="改过的任务"),
+            self.url,
+            {"action": "update", "pk": flight.pk, "prefix": f"e{flight.pk}",
+             **self.payload(prefix=f"e{flight.pk}", name="改过的任务")},
         )
-        self.assertRedirects(response, reverse("ops:save_flights", args=[self.save.pk]))
+        self.assertRedirects(response, self.url)
         flight.refresh_from_db()
         self.assertEqual(flight.name, "改过的任务")
 
-    def test_delete_flight(self):
+    def test_delete_flight_from_dialog(self):
         flight = FlightLog.objects.create(
             name="要删的任务", rocket=self.rocket, site=self.site, program=self.save,
         )
         response = self.client.post(
-            reverse("ops:flight_delete", args=[flight.pk]), {"confirmed": "yes"},
+            self.url, {"action": "delete", "pk": flight.pk, "confirmed": "yes"},
         )
-        self.assertRedirects(response, reverse("ops:save_flights", args=[self.save.pk]))
+        self.assertRedirects(response, self.url)
         self.assertFalse(FlightLog.objects.filter(pk=flight.pk).exists())
+
 
 

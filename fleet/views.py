@@ -1,4 +1,9 @@
-"""火箭详情与火箭/载荷/级的增删改（改造文档 10 第 4.3 / 5.5 节）。"""
+"""火箭详情（含级的弹窗增删改）与火箭/载荷/级的旧 CRUD 视图。
+
+新增：火箭详情页上的**级**改为弹窗增删改，POST 回详情页自己的 URL（文档 12 第 5.3 节）。
+下方那些 `*CreateView` / `*UpdateView` / `*DeleteView` 是文档 12 之前的独立表单页/确认页，
+在路由删除（同一次改造的最后一步）之后会一起移除。
+"""
 
 from django.contrib import messages
 from django.shortcuts import redirect
@@ -6,6 +11,7 @@ from django.urls import reverse
 from django.views.generic import CreateView, DeleteView, DetailView, UpdateView
 
 from core.views import (
+    DialogCrudMixin,
     FormPageMixin,
     SafeDeleteMixin,
     ScopedCreateView,
@@ -18,23 +24,52 @@ from .forms import PayloadForm, RocketForm, StageForm
 from .models import Payload, Rocket, RocketStage
 
 
-class RocketDetailView(DetailView):
-    """火箭详情：级序列表（降序渲染）+ 逐级 Δv + 总 Δv。"""
+class RocketDetailView(DialogCrudMixin, DetailView):
+    """火箭详情：级序列表（降序渲染）+ 逐级 Δv + 总 Δv，以及**级的弹窗增删改**。
+
+    级的归属校验按 `rocket=self.object`（不是 `program`）。
+    """
 
     model = Rocket
     template_name = "fleet/rocket_detail.html"
+
+    # ---- 弹窗增删改的两个钩子（操作对象是「级」） ----
+    def get_scoped_object(self, pk):
+        if not (pk and str(pk).isdigit()):
+            return None
+        return self.object.stages.filter(pk=pk).first()
+
+    def build_form(self, data, instance, prefix=None):
+        return StageForm(data, instance=instance, rocket=self.object, prefix=prefix)
+
+    def get_rows(self):
+        return []          # 本页不用通用 rows 循环，表格行在 get_context_data 里自己拼
+
+    # ---- POST 前先取到火箭 ----
+    def post(self, request, *args, **kwargs):
+        self.object = self.get_object()
+        return super().post(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
         ctx["stage_rows"] = vehicle_delta_v(self.object)          # 已按 stage_order 升序
         ctx["total_dv"] = sum(r["delta_v"] or 0 for r in ctx["stage_rows"])
-        # 页面上一行同时显示「级配置」与「Δv」，所以把级对象挂到对应的 Δv 行上。
+        # 页面上一行同时显示「级配置」「Δv」与两个弹窗按钮，所以把级对象与它的表单挂到对应行上。
         # 两个序列同序（都按 stage_order 升序），zip 是安全的。
         stages = list(
             self.object.stages.select_related("engine", "fuel_tank").order_by("stage_order")
         )
         for row, stage in zip(ctx["stage_rows"], stages):
             row["stage"] = stage
+            row["form"] = self.build_form(None, stage, prefix=f"e{stage.pk}")
+            row["prefix"] = f"e{stage.pk}"
+            row["edit_id"] = f"dlg-edit-{stage.pk}"
+            row["del_id"] = f"dlg-del-{stage.pk}"
+        # 校验失败时把带错误的表单挂回那一行，并让该弹窗自动打开
+        for row in ctx["stage_rows"]:
+            row["open_edit"] = self.open_dialog == "edit" and self.open_pk == row["stage"].pk
+            if row["open_edit"] and self.bound_form is not None:
+                row["form"] = self.bound_form
         return ctx
 
 

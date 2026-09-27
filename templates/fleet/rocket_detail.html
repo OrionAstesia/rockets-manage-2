@@ -3,19 +3,10 @@
 {% block title %}{{ rocket.name }} · 火箭详情{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-end mb-3">
-  <div>
-    <h1 class="h4 mb-0">{{ rocket.name }}</h1>
-    <div class="text-muted small">
-      所属存档：<a href="{% url 'ops:save_rockets' rocket.program_id %}">{{ rocket.program }}</a>
-    </div>
-  </div>
-  <div class="text-nowrap">
-    <a class="btn btn-sm btn-outline-secondary" href="{% url 'fleet:rocket_update' rocket.pk %}">编辑火箭</a>
-    <form class="d-inline" method="post" action="{% url 'fleet:rocket_delete' rocket.pk %}">
-      {% csrf_token %}
-      <button type="submit" class="btn btn-sm btn-outline-danger">删除火箭</button>
-    </form>
+<div class="mb-3">
+  <h1 class="h4 mb-0">{{ rocket.name }}</h1>
+  <div class="text-muted small">
+    所属存档：<a href="{% url 'ops:save_rockets' rocket.program_id %}">{{ rocket.program }}</a>
   </div>
 </div>
 
@@ -45,10 +36,7 @@
   ℹ 本页自上而下显示，底部为第 1 级（最先点火的起飞级）。Δv 从第 1 级起向上累加。
 </div>
 
-<div class="d-flex justify-content-between align-items-center">
-  <h2 class="h5 mb-0">级序与 Δv</h2>
-  <a class="btn btn-sm btn-primary" href="{% url 'fleet:stage_create' %}?rocket={{ rocket.pk }}">+ 新增一级</a>
-</div>
+<h2 class="h5 mb-0">级序与 Δv</h2>
 <div class="table-responsive">
   <table class="table table-sm table-striped align-middle">
     <thead class="table-light">
@@ -86,15 +74,13 @@
         <td class="text-end">{{ row.delta_v|floatformat:0|default:"—" }}</td>
         <td class="text-end">{{ row.cumulative|floatformat:0|default:"—" }}</td>
         <td class="text-end text-nowrap">
-          <a class="btn btn-sm btn-outline-secondary" href="{% url 'fleet:stage_update' row.stage.pk %}">编辑</a>
-          <form class="d-inline" method="post" action="{% url 'fleet:stage_delete' row.stage.pk %}">
-            {% csrf_token %}<button type="submit" class="btn btn-sm btn-outline-danger">删除</button>
-          </form>
+          <button type="button" class="btn btn-sm btn-outline-secondary" data-open-dialog="{{ row.edit_id }}">编辑</button>
+          <button type="button" class="btn btn-sm btn-outline-danger" data-open-dialog="{{ row.del_id }}">删除</button>
         </td>
       </tr>
       {% empty %}
       <tr>
-        <td colspan="10" class="text-muted">这枚火箭还没有配置级。点右上角「+ 新增一级」添加。</td>
+        <td colspan="10" class="text-muted">这枚火箭还没有配置级。点右下角的 <strong>+</strong> 添加一级。</td>
       </tr>
       {% endfor %}
     </tbody>
@@ -114,4 +100,10 @@
   m₀ = 本级干重 + 本级燃料 + 上方所有级 + 载荷。
   <strong>本页 Δv 不含载荷质量</strong>（火箭与载荷之间没有外键，按 payload_mass = 0 计算）。
 </p>
+
+{% include "includes/_dialog.html" with dialog_id="dlg-new" title="新增一级" action="create" form=new_form prefix="new" is_open=open_new %}
+{% for row in stage_rows %}
+  {% include "includes/_dialog.html" with dialog_id=row.edit_id title=row.stage action="update" form=row.form pk=row.stage.pk prefix=row.prefix is_open=row.open_edit %}
+  {% include "includes/_dialog.html" with dialog_id=row.del_id title="删除级" action="delete" pk=row.stage.pk confirm_text="删除这一级之后，它的 Δv 会从总 Δv 里消失。此操作不可恢复。" danger=True %}
+{% endfor %}
 {% endblock %}

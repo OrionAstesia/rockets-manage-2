@@ -1,7 +1,7 @@
-"""存档各集合的列表页、发射日程与发射日志的增删改（文档 11 第 4.1 节）。
+"""存档各集合的列表页（列表 + 弹窗增删改）、发射日程与发射日志的 CRUD（文档 11 / 12）。
 
 每个集合**独立成页**：一页只显示一张表，二级导航在 `templates/ops/save_base.html` 里。
-旧的 `/saves/<pk>/`（工作台）现在是 302 → 火箭列表。
+增删改不再有独立路由，全部 POST 回列表页自己的 URL，靠 `action` 字段分流（文档 12 第 4 节）。
 """
 
 from django.db.models import Count, F
@@ -9,13 +9,15 @@ from django.urls import reverse
 from django.views.generic import ListView, RedirectView
 
 from core.views import (
-    SaveScopedListView,
+    SaveScopedCrudView,
     ScopedCreateView,
     ScopedDeleteView,
     ScopedUpdateView,
 )
+from fleet.forms import PayloadForm, RocketForm
 from fleet.models import Payload, Rocket
 from services.orbital import orbital_period
+from spaceflight.forms import SiteForm, SpacecraftForm
 from spaceflight.models import Site, Spacecraft
 
 from .forms import FlightLogForm
@@ -45,8 +47,9 @@ def period_text(spacecraft):
     return f"{seconds:,.1f} s · {days:.4f} Kerbin 天"
 
 
-class SaveRocketsView(SaveScopedListView):
+class SaveRocketsView(SaveScopedCrudView):
     model = Rocket
+    form_class = RocketForm
     template_name = "ops/save_rockets.html"
     context_object_name = "rockets"
     select_related = ()
@@ -56,39 +59,47 @@ class SaveRocketsView(SaveScopedListView):
         return super().get_queryset().annotate(stage_total=Count("stages"))
 
 
-class SavePayloadsView(SaveScopedListView):
+class SavePayloadsView(SaveScopedCrudView):
     model = Payload
+    form_class = PayloadForm
     template_name = "ops/save_payloads.html"
     context_object_name = "payloads"
 
 
-class SaveSitesView(SaveScopedListView):
+class SaveSitesView(SaveScopedCrudView):
     model = Site
+    form_class = SiteForm
     template_name = "ops/save_sites.html"
     context_object_name = "sites"
     select_related = ("body",)
 
 
-class SaveSpacecraftView(SaveScopedListView):
+class SaveSpacecraftView(SaveScopedCrudView):
     model = Spacecraft
+    form_class = SpacecraftForm
     template_name = "ops/save_spacecraft.html"
-    context_object_name = "spacecraft_rows"
+    context_object_name = "spacecraft"
     select_related = ("body",)
 
-    def get_queryset(self):
-        # 周期实时算、不落库，所以返回带 period 的字典列表（**不要**给这个视图设 paginate_by）
-        return [{"obj": sc, "period": period_text(sc)} for sc in super().get_queryset()]
+    def get_rows(self):
+        rows = super().get_rows()
+        for row in rows:
+            row["period"] = period_text(row["obj"])     # 周期实时算，挂到行上给模板用
+        return rows
 
 
-class SaveFlightsView(SaveScopedListView):
+class SaveFlightsView(SaveScopedCrudView):
     model = FlightLog
+    form_class = FlightLogForm
     template_name = "ops/save_flights.html"
-    context_object_name = "flight_rows"
+    context_object_name = "flights"
     select_related = ("rocket", "site")
 
-    def get_queryset(self):
-        # 同上：返回字典列表，不要设 paginate_by
-        return [{"obj": flight, "result": result_text(flight)} for flight in super().get_queryset()]
+    def get_rows(self):
+        rows = super().get_rows()
+        for row in rows:
+            row["result"] = result_text(row["obj"])
+        return rows
 
 
 class SaveDetailRedirectView(RedirectView):
