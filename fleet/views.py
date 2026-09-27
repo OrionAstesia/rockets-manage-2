@@ -1,34 +1,20 @@
-"""火箭详情（含级的弹窗增删改）与火箭/载荷/级的旧 CRUD 视图。
+"""火箭详情页：级序列表 + Δv，以及**级的弹窗增删改**（文档 11 §4.3 / 12 §5.3）。
 
-新增：火箭详情页上的**级**改为弹窗增删改，POST 回详情页自己的 URL（文档 12 第 5.3 节）。
-下方那些 `*CreateView` / `*UpdateView` / `*DeleteView` 是文档 12 之前的独立表单页/确认页，
-在路由删除（同一次改造的最后一步）之后会一起移除。
+火箭与载荷本身的增删改在各自存档的列表页上用弹窗完成（`ops:save_rockets` / `ops:save_payloads`），
+所以本文件只有这一个视图。
 """
 
-from django.contrib import messages
-from django.shortcuts import redirect
-from django.urls import reverse
-from django.views.generic import CreateView, DeleteView, DetailView, UpdateView
+from django.views.generic import DetailView
 
-from core.views import (
-    DialogCrudMixin,
-    FormPageMixin,
-    SafeDeleteMixin,
-    ScopedCreateView,
-    ScopedDeleteView,
-    ScopedUpdateView,
-)
+from core.views import DialogCrudMixin
 from services.orbital import vehicle_delta_v
 
-from .forms import PayloadForm, RocketForm, StageForm
-from .models import Payload, Rocket, RocketStage
+from .forms import StageForm
+from .models import Rocket
 
 
 class RocketDetailView(DialogCrudMixin, DetailView):
-    """火箭详情：级序列表（降序渲染）+ 逐级 Δv + 总 Δv，以及**级的弹窗增删改**。
-
-    级的归属校验按 `rocket=self.object`（不是 `program`）。
-    """
+    """级的归属校验按 `rocket=self.object`（不是 `program`）。"""
 
     model = Rocket
     template_name = "fleet/rocket_detail.html"
@@ -70,101 +56,4 @@ class RocketDetailView(DialogCrudMixin, DetailView):
             row["open_edit"] = self.open_dialog == "edit" and self.open_pk == row["stage"].pk
             if row["open_edit"] and self.bound_form is not None:
                 row["form"] = self.bound_form
-        return ctx
-
-
-class RocketCreateView(ScopedCreateView):
-    model = Rocket
-    form_class = RocketForm
-    list_url_name = "ops:save_rockets"
-
-
-class RocketUpdateView(ScopedUpdateView):
-    model = Rocket
-    form_class = RocketForm
-
-    def get_source_url(self):
-        # 有意的例外：改完火箭回它的详情页（要看级与 Δv），不回列表
-        return reverse("fleet:rocket_detail", args=[self.object.pk])
-
-
-class RocketDeleteView(ScopedDeleteView):
-    model = Rocket
-    list_url_name = "ops:save_rockets"
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx["extra_warning"] = f"这枚火箭的 {self.object.stages.count()} 级将一并删除。"
-        return ctx
-
-
-class PayloadCreateView(ScopedCreateView):
-    model = Payload
-    form_class = PayloadForm
-    list_url_name = "ops:save_payloads"
-
-
-class PayloadUpdateView(ScopedUpdateView):
-    model = Payload
-    form_class = PayloadForm
-    list_url_name = "ops:save_payloads"
-
-
-class PayloadDeleteView(ScopedDeleteView):
-    model = Payload
-    list_url_name = "ops:save_payloads"
-
-
-class StageCreateView(FormPageMixin, CreateView):
-    """`/stages/new/?rocket=<pk>`：级单独成页，不嵌在火箭页里。"""
-
-    model = RocketStage
-    form_class = StageForm
-
-    def dispatch(self, request, *args, **kwargs):
-        rocket_id = request.GET.get("rocket", "")
-        self.rocket = Rocket.objects.filter(pk=rocket_id).first() if rocket_id.isdigit() else None
-        if self.rocket is None:
-            messages.error(request, "请先从火箭详情页点「+ 新增一级」。")
-            return redirect("core:save_list")
-        return super().dispatch(request, *args, **kwargs)
-
-    def get_form_kwargs(self):
-        return {**super().get_form_kwargs(), "rocket": self.rocket}
-
-    def get_source_url(self):
-        return reverse("fleet:rocket_detail", args=[self.rocket.pk])
-
-    def form_title(self):
-        return f"新增级：{self.rocket.name}"
-
-    def get_success_url(self):
-        messages.success(self.request, f"已新增：{self.object}")
-        return self.get_source_url()
-
-
-class StageUpdateView(FormPageMixin, UpdateView):
-    model = RocketStage
-    form_class = StageForm
-
-    def get_source_url(self):
-        return reverse("fleet:rocket_detail", args=[self.object.rocket_id])
-
-    def form_title(self):
-        return f"编辑级：{self.object}"
-
-    def get_success_url(self):
-        messages.success(self.request, "已保存。")
-        return self.get_source_url()
-
-
-class StageDeleteView(SafeDeleteMixin, DeleteView):
-    model = RocketStage
-
-    def get_source_url(self):
-        return reverse("fleet:rocket_detail", args=[self.object.rocket_id])
-
-    def get_context_data(self, **kwargs):
-        ctx = super().get_context_data(**kwargs)
-        ctx["extra_warning"] = "删除这一级之后，它的 Δv 会从总 Δv 里消失。"
         return ctx

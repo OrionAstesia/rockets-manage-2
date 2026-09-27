@@ -1,19 +1,13 @@
-"""存档各集合的列表页（列表 + 弹窗增删改）、发射日程与发射日志的 CRUD（文档 11 / 12）。
+"""存档各集合的列表页（列表 + 弹窗增删改）与发射日程（文档 11 / 12）。
 
 每个集合**独立成页**：一页只显示一张表，二级导航在 `templates/ops/save_base.html` 里。
-增删改不再有独立路由，全部 POST 回列表页自己的 URL，靠 `action` 字段分流（文档 12 第 4 节）。
+增删改没有独立路由，全部 POST 回列表页自己的 URL，靠 `action` 字段分流（文档 12 第 4 节）。
 """
 
 from django.db.models import Count, F
-from django.urls import reverse
-from django.views.generic import ListView, RedirectView
+from django.views.generic import ListView
 
-from core.views import (
-    SaveScopedCrudView,
-    ScopedCreateView,
-    ScopedDeleteView,
-    ScopedUpdateView,
-)
+from core.views import SaveScopedCrudView
 from fleet.forms import PayloadForm, RocketForm
 from fleet.models import Payload, Rocket
 from services.orbital import orbital_period
@@ -102,15 +96,6 @@ class SaveFlightsView(SaveScopedCrudView):
         return rows
 
 
-class SaveDetailRedirectView(RedirectView):
-    """旧的 `/saves/<pk>/`（原工作台）→ 火箭列表。302，将来可能再调（文档 11 第 2.2 节）。"""
-
-    permanent = False
-
-    def get_redirect_url(self, *args, **kwargs):
-        return reverse("ops:save_rockets", args=[kwargs["pk"]])
-
-
 class ScheduleView(ListView):
     """发射日程：全存档的待发任务，按计划日期升序（`planned_date` 为空的排最后）。"""
 
@@ -124,20 +109,3 @@ class ScheduleView(ListView):
             .select_related("rocket", "payload", "site")
             .order_by(F("planned_date").asc(nulls_last=True))
         )
-
-
-class FlightLogCreateView(ScopedCreateView):
-    model = FlightLog
-    form_class = FlightLogForm
-    list_url_name = "ops:save_flights"
-
-
-class FlightLogUpdateView(ScopedUpdateView):
-    model = FlightLog
-    form_class = FlightLogForm
-    list_url_name = "ops:save_flights"
-
-
-class FlightLogDeleteView(ScopedDeleteView):
-    model = FlightLog
-    list_url_name = "ops:save_flights"

@@ -333,15 +333,6 @@ class SaveListPagesTests(TestCase):
         response = self.client.get(reverse("ops:save_rockets", args=[99999]))
         self.assertEqual(response.status_code, 404)
 
-    def test_old_save_entry_redirects_to_rockets(self):
-        """文档 11 §2.2：旧的 /saves/<pk>/ 302 → 火箭列表。"""
-        response = self.client.get(reverse("ops:save_detail", args=[self.save_a.pk]))
-        self.assertEqual(response.status_code, 302)
-        self.assertEqual(
-            response.headers["Location"],
-            reverse("ops:save_rockets", args=[self.save_a.pk]),
-        )
-
     def test_save_subnav_exists_and_highlights_current_page(self):
         content = self.client.get(
             reverse("ops:save_rockets", args=[self.save_a.pk])
