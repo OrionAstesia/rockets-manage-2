@@ -5,31 +5,6 @@
 {% block content %}
 <h1 class="h4 mb-3">存档</h1>
 
-<div class="card mb-4">
-  <div class="card-header">新建存档</div>
-  <div class="card-body">
-    <form method="post" action="{% url 'core:save_create' %}" class="row g-2 align-items-end">
-      {% csrf_token %}
-      <div class="col-md-4">
-        <label class="form-label" for="{{ save_form.name.id_for_label }}">{{ save_form.name.label }}</label>
-        {{ save_form.name }}
-      </div>
-      <div class="col-md-3">
-        <label class="form-label" for="{{ save_form.start_date.id_for_label }}">{{ save_form.start_date.label }}</label>
-        {{ save_form.start_date }}
-      </div>
-      <div class="col-md-3">
-        <label class="form-label" for="{{ save_form.game_mode.id_for_label }}">{{ save_form.game_mode.label }}</label>
-        {{ save_form.game_mode }}
-      </div>
-      <div class="col-md-2">
-        <button type="submit" class="btn btn-primary w-100">新建</button>
-      </div>
-    </form>
-  </div>
-</div>
-
-<h2 class="h5">全部存档</h2>
 <div class="table-responsive">
   <table class="table table-sm table-striped align-middle">
     <thead class="table-light">
@@ -43,24 +18,21 @@
       </tr>
     </thead>
     <tbody>
-      {% for row in save_rows %}
+      {% for row in rows %}
       <tr>
-        <td><a href="{% url 'ops:save_rockets' row.pk %}">{{ row.name }}</a></td>
-        <td>{{ row.get_game_mode_display }}</td>
-        <td>{{ row.start_date|default_if_none:"—" }}</td>
-        <td class="text-end">{{ row.rocket_total }}</td>
-        <td class="text-end">{{ row.flight_total }}</td>
+        <td><a href="{% url 'ops:save_rockets' row.obj.pk %}">{{ row.obj.name }}</a></td>
+        <td>{{ row.obj.get_game_mode_display }}</td>
+        <td>{{ row.obj.start_date|default_if_none:"—" }}</td>
+        <td class="text-end">{{ row.obj.rocket_total }}</td>
+        <td class="text-end">{{ row.obj.flight_total }}</td>
         <td class="text-end text-nowrap">
-          <a class="btn btn-sm btn-outline-secondary" href="{% url 'core:save_update' row.pk %}">编辑</a>
-          <form class="d-inline" method="post" action="{% url 'core:save_delete' row.pk %}">
-            {% csrf_token %}
-            <button type="submit" class="btn btn-sm btn-outline-danger">删除</button>
-          </form>
+          <button type="button" class="btn btn-sm btn-outline-secondary" data-open-dialog="{{ row.edit_id }}">编辑</button>
+          <button type="button" class="btn btn-sm btn-outline-danger" data-open-dialog="{{ row.del_id }}">删除</button>
         </td>
       </tr>
       {% empty %}
       <tr>
-        <td colspan="6" class="text-muted">还没有存档。用上面的表单新建一个，再进去录火箭与发射场。</td>
+        <td colspan="6" class="text-muted">还没有存档。点右下角的 <strong>+</strong> 新建一个，再进去录火箭与发射场。</td>
       </tr>
       {% endfor %}
     </tbody>
@@ -116,4 +88,10 @@
     </div>
   </div>
 </div>
+
+{% include "includes/_dialog.html" with dialog_id="dlg-new" title="新增存档" action="create" form=new_form prefix="new" is_open=open_new %}
+{% for row in rows %}
+  {% include "includes/_dialog.html" with dialog_id=row.edit_id title=row.obj.name action="update" form=row.form pk=row.obj.pk prefix=row.prefix is_open=row.open_edit %}
+  {% include "includes/_dialog.html" with dialog_id=row.del_id title="删除存档" action="delete" pk=row.obj.pk confirm_text=row.delete_confirm danger=True %}
+{% endfor %}
 {% endblock %}

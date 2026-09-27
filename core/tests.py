@@ -189,9 +189,11 @@ class SaveListPageTests(TestCase):
         self.assertEqual(row.rocket_total, 1)
         self.assertEqual(row.flight_total, 7)          # 两个 Count 都加了 distinct，不会被乘积放大
 
-    def test_save_list_has_inline_create_form(self):
+    def test_save_list_has_new_dialog(self):
         response = self.client.get(reverse("core:save_list"))
-        self.assertContains(response, 'action="/saves/new/"')
+        self.assertContains(response, 'id="dlg-new"')
+        self.assertContains(response, 'data-open-dialog="dlg-new"')     # FAB 打开它
+        self.assertContains(response, 'name="action"')
 
     def test_empty_state(self):
         FlightLog.objects.all().delete()
@@ -202,50 +204,55 @@ class SaveListPageTests(TestCase):
         self.assertContains(response, "还没有任何发射记录或计划")
         self.assertContains(response, "没有在役航天器")
         self.assertContains(response, "还没有存档")
+        self.assertNotContains(response, "上面的表单")      # 行内表单已改成弹窗
 
 
-class SaveCrudTests(TestCase):
-    """文档 10 第 4.1 / 8.1：存档的增删改；删除确认页要列出连带数量。"""
+class SaveDialogTests(TestCase):
+    """存档的弹窗增删改：POST 回 `/saves/`，靠 action 分流（文档 12 第 5.5 / 8 节）。"""
 
     def setUp(self):
         self.save = Save.objects.create(name="生涯存档", game_mode=GameMode.CAREER)
         self.body = Body.objects.create(name="Kerbin", mu=3.5316e12, radius=600000)
         self.rocket = Rocket.objects.create(name="火箭 A", program=self.save)
         self.site = Site.objects.create(name="发射场", program=self.save, body=self.body)
+        self.url = reverse("core:save_list")
 
-    def test_create_save(self):
+    def test_create_save_from_dialog(self):
         response = self.client.post(
-            reverse("core:save_create"),
-            {"name": "新存档", "start_date": "2026-02-02", "game_mode": GameMode.SANDBOX},
+            self.url,
+            {"action": "create", "prefix": "new", "new-name": "新存档",
+             "new-start_date": "2026-02-02", "new-game_mode": GameMode.SANDBOX},
         )
-        self.assertRedirects(response, reverse("core:save_list"))
+        self.assertRedirects(response, self.url)
         save = Save.objects.get(name="新存档")
         self.assertEqual(save.game_mode, GameMode.SANDBOX)
         self.assertEqual(save.start_date, date(2026, 2, 2))
 
-    def test_update_save(self):
+    def test_update_save_from_dialog(self):
         response = self.client.post(
-            reverse("core:save_update", args=[self.save.pk]),
-            {"name": "改名了", "start_date": "", "game_mode": GameMode.SCIENCE},
+            self.url,
+            {"action": "update", "pk": self.save.pk, "prefix": f"e{self.save.pk}",
+             f"e{self.save.pk}-name": "改名了", f"e{self.save.pk}-start_date": "",
+             f"e{self.save.pk}-game_mode": GameMode.SCIENCE},
         )
-        self.assertRedirects(response, reverse("core:save_list"))
+        self.assertRedirects(response, self.url)
         self.save.refresh_from_db()
         self.assertEqual(self.save.name, "改名了")
         self.assertEqual(self.save.game_mode, GameMode.SCIENCE)
 
-    def test_delete_confirm_page_lists_related_counts(self):
+    def test_delete_dialog_lists_related_counts(self):
         FlightLog.objects.create(
             name="任务", rocket=self.rocket, site=self.site, program=self.save,
         )
-        response = self.client.get(reverse("core:save_delete", args=[self.save.pk]))
-        self.assertEqual(response.status_code, 200)
+        response = self.client.get(self.url)
         for expected in ("火箭 1", "发射场 1", "发射日志 1", "航天器 0", "载荷 0"):
             self.assertContains(response, expected)
+        self.assertContains(response, "此操作不可恢复")
 
-    def test_delete_without_confirmation_only_shows_page(self):
-        """列表页行尾的删除表单不带 confirmed，只应跳到确认页而不是真删。"""
-        response = self.client.post(reverse("core:save_delete", args=[self.save.pk]))
-        self.assertEqual(response.status_code, 200)
+    def test_delete_without_confirmation_does_nothing(self):
+        """只有带 confirmed=yes 的提交才真的删（行上的删除按钮只开弹窗）。"""
+        response = self.client.post(self.url, {"action": "delete", "pk": self.save.pk})
+        self.assertRedirects(response, self.url)
         self.assertTrue(Save.objects.filter(pk=self.save.pk).exists())
 
     def test_confirmed_delete_cascades_to_contents(self):
@@ -253,9 +260,9 @@ class SaveCrudTests(TestCase):
             name="任务", rocket=self.rocket, site=self.site, program=self.save,
         )
         response = self.client.post(
-            reverse("core:save_delete", args=[self.save.pk]), {"confirmed": "yes"},
+            self.url, {"action": "delete", "pk": self.save.pk, "confirmed": "yes"},
         )
-        self.assertRedirects(response, reverse("core:save_list"))
+        self.assertRedirects(response, self.url)
         self.assertFalse(Save.objects.exists())
         self.assertFalse(Rocket.objects.exists())
         self.assertFalse(Site.objects.exists())
@@ -268,10 +275,11 @@ class SaveCrudTests(TestCase):
             name="跨存档任务", rocket=self.rocket, site=self.site, program=other,
         )
         response = self.client.post(
-            reverse("core:save_delete", args=[self.save.pk]), {"confirmed": "yes"}, follow=True,
+            self.url, {"action": "delete", "pk": self.save.pk, "confirmed": "yes"}, follow=True,
         )
         self.assertTrue(Save.objects.filter(pk=self.save.pk).exists())
         self.assertContains(response, "删除失败")
+
 
 
 def nav_link(html, href):
@@ -303,8 +311,7 @@ class SaveListHomeSplitTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "存档一")
         self.assertContains(response, "存档二")
-        self.assertContains(response, "新建存档")
-        self.assertContains(response, 'action="/saves/new/"')
+        self.assertContains(response, "新增存档")                  # 新建弹窗的标题
         self.assertEqual(len(response.context["save_rows"]), 2)   # 与数据库里的存档数一致
 
     def test_sidebar_has_three_modules(self):

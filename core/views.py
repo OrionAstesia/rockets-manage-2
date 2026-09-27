@@ -333,21 +333,61 @@ class HomeView(TemplateView):
     template_name = "core/home.html"
 
 
-class SaveListView(TemplateView):
-    """存档列表 `/saves/`：行内新建存档表单 + 存档表 + 全局统计 + 近期发射。
+class SaveListView(DialogCrudMixin, TemplateView):
+    """存档列表 `/saves/`：存档的弹窗增删改 + 全局统计 + 近期发射（文档 11 §4.3 / 12 §5.5）。
 
-    内容原来在 `/` 上（文档 11 第 4.3 节要求把存档列表搬到 `/saves/`）。
+    `Save` 自己就是列表数据，所以直接在这个视图上挂弹窗增删改（没有 `program` 归属）。
+    删存档要保留两项特殊处理：确认弹窗**列出将连带删除的各项数量**，以及
+    「别的存档的发射日志仍引用它」的 PROTECT 提示（`Save.delete()` 的级联顺序在模型层）。
     """
 
     template_name = "core/save_list.html"
+    model = Save
+    form_class = SaveForm
+    context_object_name = "saves"
+    _rows_source = None
 
+    # ---- 弹窗增删改的钩子 ----
+    def get_scoped_object(self, pk):
+        if not (pk and str(pk).isdigit()):
+            return None
+        return Save.objects.filter(pk=pk).first()
+
+    def build_form(self, data, instance, prefix=None):
+        return SaveForm(data, instance=instance, prefix=prefix)
+
+    def protected_error_message(self, exc):
+        return f"删除失败：别的存档的发射日志仍引用它（{protected_names(exc)}），请先处理。"
+
+    def get_rows_source(self):
+        if self._rows_source is None:
+            self._rows_source = Save.objects.annotate(
+                rocket_total=Count("rockets", distinct=True),
+                flight_total=Count("flights", distinct=True),
+            )
+        return self._rows_source
+
+    def get_rows(self):
+        rows = super().get_rows()
+        for row in rows:
+            save = row["obj"]
+            counts = [
+                ("火箭", save.rockets.count()),
+                ("载荷", save.payloads.count()),
+                ("发射场", save.sites.count()),
+                ("航天器", save.spacecraft.count()),
+                ("发射日志", save.flights.count()),
+            ]
+            row["related_counts"] = counts
+            row["delete_confirm"] = (
+                "将删除：" + "、".join(f"{label} {n}" for label, n in counts) + "。此操作不可恢复。"
+            )
+        return rows
+
+    # ---- GET ----
     def get_context_data(self, **kwargs):
         ctx = super().get_context_data(**kwargs)
-        ctx["save_rows"] = Save.objects.annotate(
-            rocket_total=Count("rockets", distinct=True),
-            flight_total=Count("flights", distinct=True),
-        )
-        ctx["save_form"] = SaveForm()
+        ctx["save_rows"] = self.get_rows_source()
         ctx["spacecraft_counts"] = self.spacecraft_counts()
         # 按计划日期降序；planned_date 为空的排在最后（SQLite 下 NULL 最小，DESC 自然靠后）
         ctx["recent_flights"] = (
