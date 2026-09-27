@@ -2,7 +2,7 @@
 
 《坎巴拉太空计划》(Kerbal Space Program) 玩家的**发射计划与任务记录管理工具**。
 
-> **状态**：v1 已实现（`docs/spec/00-最小系统.md` 的 S1–S4），已完成**「写操作从 Admin 移到前台」改造**（`docs/spec/10-前台内联编辑改造.md`）与**「左侧导航 + 每类数据独立成页」重构**（`docs/spec/11-界面导航重构.md`）。`manage.py test` 158 项全绿。
+> **状态**：v1 已实现（`docs/spec/00-最小系统.md` 的 S1–S4），并已完成「写操作从 Admin 移到前台」（`10-前台内联编辑改造.md`）、「左侧导航 + 每类数据独立成页」（`11-界面导航重构.md`）、**「增删改改弹窗 + 右下角悬浮新增按钮」**（`12-弹窗增删改.md`、`13-新增入口悬浮按钮.md`）。`manage.py test` **168 项全绿**。
 
 ---
 
@@ -28,40 +28,43 @@
 | 数据库 | **SQLite**（单文件 `db.sqlite3`，可直接拷贝备份） |
 | Python | **3.10**，conda 环境名 **`rocket`** |
 | 其他依赖 | **无**（不用 numpy、不用 DRF、不用 JS 库） |
-| 前端 | Django 模板 + Bootstrap 5（CDN），**零 JS 文件、零内联事件** |
+| 前端 | Django 模板 + Bootstrap 5（CDN）＋**一个 30 行的原生 JS**（`static/js/modal.js`，只负责开关原生 `<dialog>`；无 AJAX、无前端校验、无 JS 库） |
 | 测试 | `manage.py test` |
 
 ---
 
 ## 仓库当前状态
 
-✅ **v1 + 前台可写改造 + 导航重构都已完成，可以跑了。**
+✅ **功能与界面改造都已完成，可以跑了。**
 
 ```
 manage.py
-config/                  settings（zh-hans / Asia-Shanghai / 根 templates）+ urls
+config/                  settings（zh-hans / Asia-Shanghai / 根 templates / STATICFILES_DIRS）+ urls
 core/                    Body 模型、constants.py（常量）、forms.py（表单基类 + program 注入）、
-                         views.py（空主页 + 存档列表 + 存档 CRUD + 共用视图基类）
-parts/                   三种部件模型 + 表单 + /reference/<四类>/ 列表页与 CRUD
-fleet/                   Rocket / RocketStage / Payload + 表单 + 火箭详情与 CRUD（含级的 CRUD）
-spaceflight/             Site / Spacecraft（clean() 校验）+ 表单 + CRUD
-ops/                     Save / FlightLog + 表单 + /saves/<pk>/<五类>/ 列表页 + /schedule/
+                         views.py（DialogCrudMixin + SaveScopedCrudView + CrudListView + 主页 + 存档列表）
+parts/                   三种部件模型 + 表单 + /reference/<四类>/ 列表页（带弹窗）
+fleet/                   Rocket / RocketStage / Payload + 表单 + 火箭详情（级序 + Δv + 级的弹窗）
+spaceflight/             Site / Spacecraft 模型与表单（没有自己的 URL，页面在 ops 里）
+ops/                     Save / FlightLog + 表单 + /saves/<pk>/<五类>/ 列表页（带弹窗）+ /schedule/
 services/orbital.py      7 个纯计算函数（周期 / 拱点 / 高度 / 逐级 Δv）
+static/js/modal.js       唯一的 JS：开关弹窗、点遮罩关闭、校验失败后自动重开
 templates/
-  base.html              左侧主导航（三大模块）+ {% block subnav %} + messages
-  form.html  confirm_delete.html        通用表单页 / 删除确认页
+  base.html              左侧主导航 + {% block subnav %} + messages + 右下角悬浮「+」按钮
+  includes/_dialog.html  通用弹窗骨架（所有增删改弹窗都用它）
   core/home.html         空主页（占位）
-  core/save_list.html    存档列表 /saves/
+  core/save_list.html    存档列表 /saves/（存档的增删改弹窗）
   ops/save_base.html     存档二级导航骨架
-  ops/save_{rockets,payloads,sites,spacecraft,flights}.html   每个集合一页
-  ops/schedule.html      发射日程
-  fleet/rocket_detail.html   火箭详情（级序 + Δv）
+  ops/save_{rockets,payloads,sites,spacecraft,flights}.html   每个集合一页 + 弹窗
+  ops/schedule.html      发射日程（只读）
+  fleet/rocket_detail.html   火箭详情 + 级的弹窗增删改
   parts/reference_base.html  参考数据二级导航骨架
-  parts/{engine,fueltank,instrument,body}_list.html          每类一页
+  parts/{engine,fueltank,instrument,body}_list.html          每类一页（天体只读）
 fixtures/bodies.json     6 个天体的种子数据（规格 §5.1），已随仓库提供
 docs/spec/00-最小系统.md           数据模型 / 计算 / 种子数据（权威）
-docs/spec/10-前台内联编辑改造.md    前台可写与 CRUD 页（权威）
+docs/spec/10-前台内联编辑改造.md    前台可写（权威）
 docs/spec/11-界面导航重构.md        导航结构与页面拆分（权威）
+docs/spec/12-弹窗增删改.md          弹窗增删改 + 单端点 POST 协议（权威）
+docs/spec/13-新增入口悬浮按钮.md    右下角悬浮「+」按钮（权威）
 README.md  requirements.txt  .gitignore
 ```
 
@@ -98,30 +101,31 @@ python manage.py runserver 127.0.0.1:8000
 
 导航是**左侧栏**，只有三大模块（存档 / 参考数据 / 发射日程）；存档与参考数据各有一层**二级导航**，每类数据独立成页（一页一张表）。
 
+**增删改没有独立路由**：每条列表页自己就是端点，右下角的悬浮「+」开新建弹窗、行尾按钮开编辑/删除弹窗，表单 POST 回同一条 URL，用隐藏字段 `action`（`create`/`update`/`delete`）分流。
+
 | 页面 | 路径 | 作用 |
 |---|---|---|
 | 主页（暂空） | `/` | 占位文案；只能从侧栏顶部的应用名进入，不在侧栏项里 |
-| 存档列表 | `/saves/` | 全部存档 + 行内新建存档 + 全局统计 + 近期发射 |
-| 存档各集合 | `/saves/<pk>/{rockets,payloads,sites,spacecraft,flights}/` | 五类数据各一页（二级导航切换） |
-| 旧存档入口 | `/saves/<pk>/` | 302 → `/saves/<pk>/rockets/` |
-| 火箭详情 | `/rockets/<pk>/` | 火箭属性 + 级序列表（降序）+ 逐级 Δv + 总 Δv；级的增删改入口 |
-| 参考数据 | `/reference/{engines,fueltanks,instruments,bodies}/` | 三类部件可增删改；天体只读 |
-| 旧参考数据入口 | `/reference/` | 302 → `/reference/engines/` |
-| 发射日程 | `/schedule/` | 全存档的待发任务（跨存档） |
-| 新增/编辑页 | `/xxx/new/?save=<pk>`、`/xxx/<pk>/edit/` | 五个 `program` 必填表用 `?save=` 带入存档；级用 `?rocket=` |
-| 删除确认页 | `/xxx/<pk>/delete/` | 只读确认页 + POST 按钮（列表页的删除按钮只跳到这里） |
+| 存档列表 | `/saves/` | 全部存档 + 全局统计 + 近期发射；存档的增删改弹窗 |
+| 存档各集合 | `/saves/<pk>/{rockets,payloads,sites,spacecraft,flights}/` | 五类数据各一页 + 弹窗增删改（二级导航切换） |
+| 火箭详情 | `/rockets/<pk>/` | 火箭属性 + 级序列表（降序）+ 逐级 Δv + 总 Δv；级的增删改弹窗 |
+| 参考数据 | `/reference/{engines,fueltanks,instruments,bodies}/` | 三类部件弹窗增删改；天体只读（无悬浮按钮） |
+| 旧参考数据入口 | `/reference/` | 302 → `/reference/engines/`（只为旧书签不 404） |
+| 发射日程 | `/schedule/` | 全存档的待发任务（跨存档，只读） |
 
 ---
 
 ## 文档
 
 - [`docs/spec/00-最小系统.md`](docs/spec/00-最小系统.md) —— **数据模型 / 计算 / 种子数据**的权威源（11 张表 / 5 个 app / 7 个计算函数）。
-- [`docs/spec/10-前台内联编辑改造.md`](docs/spec/10-前台内联编辑改造.md) —— **前台可写与各类 CRUD 页**的权威源（`00` 里「前台只读、写操作全在 Admin」的说法已作废）。
+- [`docs/spec/10-前台内联编辑改造.md`](docs/spec/10-前台内联编辑改造.md) —— **前台可写**的权威源（`00` 里「前台只读、写操作全在 Admin」的说法已作废）。
 - [`docs/spec/11-界面导航重构.md`](docs/spec/11-界面导航重构.md) —— **导航结构与页面拆分**的权威源（左侧栏、二级导航、每类数据独立成页、`/` 与 `/saves/` 的分工）。
+- [`docs/spec/12-弹窗增删改.md`](docs/spec/12-弹窗增删改.md) —— **弹窗增删改与单端点 POST 协议**的权威源（删掉 31 条 CRUD 路由，引入唯一的 JS 文件）。
+- [`docs/spec/13-新增入口悬浮按钮.md`](docs/spec/13-新增入口悬浮按钮.md) —— **右下角悬浮「+」按钮**的权威源（哪个页面有、哪个没有、文案同步）。
 
 `docs/archive/` 是设计过程存档（早期更庞大、已作废的设计），只在想知道「为什么这样定」时翻。
 
-**边界**：无 JavaScript、无 AJAX、无多态外键、无 1:1 继承、无嵌套 FormSet、无新依赖（只要 Django）。前台页面全部是普通表单 POST + 重定向，删除一律走 `DeleteView`（仅 POST）。
+**边界**：无 AJAX（JS 只管开关弹窗，数据仍走浏览器原生表单 POST）、无前端校验（校验全在服务端，错误回显到弹窗）、无多态外键、无 1:1 继承、无嵌套 FormSet、无 JS 库、无新 Python 依赖（只要 Django）。
 
 ---
 

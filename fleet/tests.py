@@ -369,6 +369,33 @@ class StageDialogTests(TestCase):
         self.assertIn(f'data-open-dialog="dlg-edit-{stage.pk}"', content)
         self.assertIn(f'data-open-dialog="dlg-del-{stage.pk}"', content)
 
+    def test_cross_rocket_stage_update_is_refused(self):
+        """拿别的火箭的级 pk 来改 → 拒绝，对方数据不变（文档 12 §8.2）。"""
+        other_rocket = Rocket.objects.create(name="别人的火箭", program=self.save)
+        other_stage = RocketStage.objects.create(
+            rocket=other_rocket, stage_order=1, structure_mass=0.1,
+        )
+        response = self.client.post(
+            self.url,
+            {"action": "update", "pk": other_stage.pk, "prefix": f"e{other_stage.pk}",
+             **self.stage_payload(prefix=f"e{other_stage.pk}", order=7)},
+        )
+        self.assertRedirects(response, self.url)
+        other_stage.refresh_from_db()
+        self.assertEqual(other_stage.stage_order, 1)
+
+    def test_cross_rocket_stage_delete_is_refused(self):
+        other_rocket = Rocket.objects.create(name="别人的火箭", program=self.save)
+        other_stage = RocketStage.objects.create(
+            rocket=other_rocket, stage_order=1, structure_mass=0.1,
+        )
+        response = self.client.post(
+            self.url, {"action": "delete", "pk": other_stage.pk, "confirmed": "yes"},
+        )
+        self.assertRedirects(response, self.url)
+        self.assertTrue(RocketStage.objects.filter(pk=other_stage.pk).exists())
+
+
 
 
 class RocketDetailProgramTests(TestCase):

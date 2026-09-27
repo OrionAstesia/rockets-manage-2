@@ -361,6 +361,55 @@ class SaveListPagesTests(TestCase):
             self.assertNotIn("/admin/", content)
 
 
+class DialogProtocolTests(TestCase):
+    """action 分流、缺参/非法参、以及跨存档越权（文档 12 第 4.2 / 8.2 节）。"""
+
+    def setUp(self):
+        self.save_a = Save.objects.create(name="存档 A")
+        self.save_b = Save.objects.create(name="存档 B")
+        self.rocket_a = Rocket.objects.create(name="A 的火箭", program=self.save_a)
+        self.rocket_b = Rocket.objects.create(name="B 的火箭", program=self.save_b)
+        self.url = reverse("ops:save_rockets", args=[self.save_a.pk])
+
+    def test_missing_action_is_refused(self):
+        response = self.client.post(self.url, {"name": "没有 action"})
+        self.assertRedirects(response, self.url)
+        self.assertEqual(Rocket.objects.count(), 2)          # 什么都没建
+
+    def test_unknown_action_is_refused(self):
+        response = self.client.post(self.url, {"action": "hack", "pk": self.rocket_a.pk})
+        self.assertRedirects(response, self.url)
+        self.assertTrue(Rocket.objects.filter(pk=self.rocket_a.pk).exists())
+
+    def test_cross_save_update_is_refused(self):
+        """拿别的存档的 pk 来改 → 拒绝，对方数据不变（防越权）。"""
+        response = self.client.post(
+            self.url,
+            {"action": "update", "pk": self.rocket_b.pk, "prefix": f"e{self.rocket_b.pk}",
+             f"e{self.rocket_b.pk}-name": "被篡改", f"e{self.rocket_b.pk}-series": "",
+             f"e{self.rocket_b.pk}-manufacturer": "", f"e{self.rocket_b.pk}-diameter": "",
+             f"e{self.rocket_b.pk}-first_flight_date": "",
+             f"e{self.rocket_b.pk}-crew_capacity": "0", f"e{self.rocket_b.pk}-cost": "0",
+             f"e{self.rocket_b.pk}-note": ""},
+        )
+        self.assertRedirects(response, self.url)
+        self.rocket_b.refresh_from_db()
+        self.assertEqual(self.rocket_b.name, "B 的火箭")
+
+    def test_cross_save_delete_is_refused(self):
+        response = self.client.post(
+            self.url, {"action": "delete", "pk": self.rocket_b.pk, "confirmed": "yes"},
+        )
+        self.assertRedirects(response, self.url)
+        self.assertTrue(Rocket.objects.filter(pk=self.rocket_b.pk).exists())
+
+    def test_delete_without_confirmation_is_refused(self):
+        response = self.client.post(self.url, {"action": "delete", "pk": self.rocket_a.pk})
+        self.assertRedirects(response, self.url)
+        self.assertTrue(Rocket.objects.filter(pk=self.rocket_a.pk).exists())
+
+
+
 class FlightLogCrudTests(TestCase):
     """发射日志的弹窗增删改：POST 回列表页，靠 action 分流（文档 12 第 4 / 8 节）。"""
 
