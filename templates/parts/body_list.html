@@ -2,6 +2,9 @@
 
 {% block title %}天体 · 参考数据{% endblock %}
 
+{# 天体是只读的，关掉右下角的悬浮按钮（文档 13 §3.3） #}
+{% block fab %}{% endblock %}
+
 {% block content %}
 {# 天体由 fixtures/bodies.json 提供，**只读**：没有「+ 新增」，也没有操作列。 #}
 <div class="d-flex justify-content-between align-items-center mb-3">

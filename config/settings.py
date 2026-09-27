@@ -124,6 +124,12 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
+# 项目根目录下的 static/（放 js/modal.js）。
+# 注意：Django 不会自动服务项目根的 static/ —— 必须列进 STATICFILES_DIRS，
+# 否则 {% static %} 能拼出 URL，但 runserver 会 404（开发模式下由 staticfiles 的
+# runserver 处理器按 finders 找文件）。仍然不需要 STATIC_ROOT / collectstatic。
+STATICFILES_DIRS = [BASE_DIR / 'static']
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 

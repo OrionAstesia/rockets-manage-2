@@ -2,6 +2,9 @@
 
 {% block title %}发射日程 · KSP 航天计划管理器{% endblock %}
 
+{# 日程页是跨存档视图，没有「新增到哪个存档」的语义，关掉悬浮按钮（文档 13 §3.3） #}
+{% block fab %}{% endblock %}
+
 {% block content %}
 <h1 class="h4 mb-1">发射日程</h1>
 <p class="text-muted">只列出「计划中」的任务，按计划发射日期从近到远排列。</p>

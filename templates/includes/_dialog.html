@@ -1,0 +1,56 @@
+{# 通用弹窗骨架（文档 12 第 6.1 节）：所有增删改弹窗都 include 这一个文件。 #}
+{# 参数：dialog_id / title / action 必填；form 用于 create·update；pk 用于 update·delete； #}
+{#       is_open 服务端校验失败时传 True；confirm_text 删除时的提示；danger 删除时把主按钮变红。 #}
+<dialog class="modal" id="{{ dialog_id }}"{% if is_open %} data-open="1"{% endif %}>
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <form method="post" novalidate>
+        {% csrf_token %}
+        <input type="hidden" name="action" value="{{ action }}">
+        {% if pk %}<input type="hidden" name="pk" value="{{ pk }}">{% endif %}
+        {% if action == "delete" %}<input type="hidden" name="confirmed" value="yes">{% endif %}
+
+        <div class="modal-header">
+          <h5 class="modal-title">{{ title }}</h5>
+          <button type="button" class="btn-close" data-close-dialog aria-label="关闭"></button>
+        </div>
+
+        <div class="modal-body">
+          {% if action == "delete" %}
+            <p class="mb-0">{{ confirm_text }}</p>
+          {% else %}
+            {% if form.non_field_errors %}
+            <div class="alert alert-danger">
+              {% for error in form.non_field_errors %}<div>{{ error }}</div>{% endfor %}
+            </div>
+            {% endif %}
+            {% for field in form %}
+            <div class="mb-3">
+              {% if field.field.widget.input_type == "checkbox" %}
+              <div class="form-check">
+                {{ field }}
+                <label class="form-check-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+              </div>
+              {% else %}
+              <label class="form-label" for="{{ field.id_for_label }}">
+                {{ field.label }}{% if field.field.required %} <span class="text-danger">*</span>{% endif %}
+              </label>
+              {{ field }}
+              {% endif %}
+              {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+              {% for error in field.errors %}<div class="text-danger small">{{ error }}</div>{% endfor %}
+            </div>
+            {% endfor %}
+          {% endif %}
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-close-dialog>取消</button>
+          <button type="submit" class="btn {% if danger %}btn-danger{% else %}btn-primary{% endif %}">
+            {% if action == "delete" %}确认删除{% else %}保存{% endif %}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</dialog>

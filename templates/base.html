@@ -1,3 +1,4 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -11,6 +12,33 @@
     @media (min-width: 768px) {
       .app-sidebar { position: sticky; top: 0; height: 100vh; overflow-y: auto; }
     }
+    /* 悬浮「+」会盖住表格最后一行，给内容区留出空间（文档 13 §2.6） */
+    .app-main { padding-bottom: 5.5rem; }
+
+    /* 原生 <dialog> 自带遮罩与居中，这里只补尺寸与样式（文档 12 §7.3） */
+    dialog.modal { border: none; padding: 0; background: transparent; max-width: 100vw; }
+    dialog.modal::backdrop { background: rgba(0, 0, 0, .5); }
+    dialog.modal .modal-dialog { min-width: min(560px, 92vw); }
+
+    /* 右下角悬浮新增按钮（文档 13 §2.2） */
+    .app-fab {
+      position: fixed;
+      right: 1.5rem;
+      bottom: 1.5rem;
+      z-index: 1030;
+      width: 3.5rem;
+      height: 3.5rem;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 .25rem .75rem rgba(0, 0, 0, .3);
+    }
+    .app-fab-plus {
+      font-size: 1.75rem;
+      line-height: 1;
+      transform: translateY(-1px);
+    }
   </style>
 </head>
 <body class="bg-body-tertiary">
@@ -22,8 +50,8 @@
     <a class="px-3 py-3 text-white text-decoration-none fw-semibold border-bottom border-secondary"
        href="{% url 'core:home' %}">KSP 存档管理器</a>
     <ul class="nav nav-pills flex-column p-2 gap-1">
-      {# 当前模块高亮靠 URL 的 url_name / namespace 判断，不需要给每个视图传上下文。
-         ⚠️「存档」用排除法：将来新增第四个模块必须回来补 url_name 条件（文档 11 §3.1）。#}
+      {# 当前模块高亮靠 URL 的 url_name / namespace 判断，不必给每个视图传上下文；「存档」用排除法 #}
+      {# ⚠️ 将来新增第四个模块必须回来补 url_name 条件（文档 11 §3.1） #}
       <li class="nav-item">
         <a class="nav-link text-white {% if request.resolver_match.url_name != 'home' and request.resolver_match.url_name != 'schedule' and request.resolver_match.namespace != 'parts' %}active{% endif %}"
            href="{% url 'core:save_list' %}">存档</a>
@@ -45,7 +73,7 @@
   {# ── 右侧内容区 ─────────────────────────────────────── #}
   <div class="flex-grow-1 min-vw-0">
     {% block subnav %}{% endblock %}
-    <main class="container-fluid px-4 py-4">
+    <main class="container-fluid px-4 py-4 app-main">
       {% for message in messages %}
       <div class="alert alert-{{ message.tags }} alert-dismissible">{{ message }}</div>
       {% endfor %}
@@ -54,5 +82,16 @@
   </div>
 
 </div>
+
+{# ── 悬浮新增按钮：默认输出；不需要它的页面在子模板里覆写为空（文档 13 §3） ── #}
+{# 放在 flex 容器之外：position: fixed 虽不受父容器影响，但放进去会多一个 flex item #}
+{% block fab %}
+<button type="button" class="btn btn-primary rounded-circle app-fab"
+        data-open-dialog="dlg-new" aria-label="新增" title="新增">
+  <span class="app-fab-plus">+</span>
+</button>
+{% endblock %}
+
+<script src="{% static 'js/modal.js' %}" defer></script>
 </body>
 </html>
