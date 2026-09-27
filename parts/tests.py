@@ -106,66 +106,75 @@ class ReferenceListPagesTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.headers["Location"], reverse("parts:engine_list"))
 
-    def test_engine_crud(self):
+    def test_engine_crud_from_dialogs(self):
+        url = reverse("parts:engine_list")
         response = self.client.post(
-            reverse("parts:engine_create"),
+            url,
             {
-                "name": "新引擎", "diameter": "2.5", "dry_mass": "3",
-                "thrust_asl": "200", "thrust_vac": "240", "isp_asl": "90",
-                "isp_vac": "350", "cost": "1500",
+                "action": "create", "prefix": "new",
+                "new-name": "新引擎", "new-diameter": "2.5", "new-dry_mass": "3",
+                "new-thrust_asl": "200", "new-thrust_vac": "240", "new-isp_asl": "90",
+                "new-isp_vac": "350", "new-cost": "1500",
             },
         )
-        self.assertRedirects(response, reverse("parts:engine_list"))
+        self.assertRedirects(response, url)
         engine = Engine.objects.get(name="新引擎")
         self.assertEqual(engine.isp_vac, 350)
 
         response = self.client.post(
-            reverse("parts:engine_update", args=[engine.pk]),
+            url,
             {
-                "name": "改过的引擎", "diameter": "2.5", "dry_mass": "3",
-                "thrust_asl": "200", "thrust_vac": "240", "isp_asl": "90",
-                "isp_vac": "355", "cost": "1500",
+                "action": "update", "pk": engine.pk, "prefix": f"e{engine.pk}",
+                f"e{engine.pk}-name": "改过的引擎", f"e{engine.pk}-diameter": "2.5",
+                f"e{engine.pk}-dry_mass": "3", f"e{engine.pk}-thrust_asl": "200",
+                f"e{engine.pk}-thrust_vac": "240", f"e{engine.pk}-isp_asl": "90",
+                f"e{engine.pk}-isp_vac": "355", f"e{engine.pk}-cost": "1500",
             },
         )
-        self.assertRedirects(response, reverse("parts:engine_list"))
+        self.assertRedirects(response, url)
         engine.refresh_from_db()
         self.assertEqual(engine.name, "改过的引擎")
         self.assertEqual(engine.isp_vac, 355)
 
         response = self.client.post(
-            reverse("parts:engine_delete", args=[engine.pk]), {"confirmed": "yes"},
+            url, {"action": "delete", "pk": engine.pk, "confirmed": "yes"},
         )
-        self.assertRedirects(response, reverse("parts:engine_list"))
+        self.assertRedirects(response, url)
         self.assertFalse(Engine.objects.filter(pk=engine.pk).exists())
 
-    def test_fueltank_and_instrument_crud(self):
+    def test_fueltank_and_instrument_crud_from_dialogs(self):
+        tanks_url = reverse("parts:fueltank_list")
         response = self.client.post(
-            reverse("parts:fueltank_create"),
-            {"name": "新罐", "diameter": "1.25", "dry_mass": "0.25", "capacity": "400",
-             "fuel_type": "XENON", "cost": "300"},
+            tanks_url,
+            {"action": "create", "prefix": "new",
+             "new-name": "新罐", "new-diameter": "1.25", "new-dry_mass": "0.25",
+             "new-capacity": "400", "new-fuel_type": "XENON", "new-cost": "300"},
         )
-        self.assertRedirects(response, reverse("parts:fueltank_list"))
+        self.assertRedirects(response, tanks_url)
         self.assertEqual(FuelTank.objects.get(name="新罐").fuel_type, FuelType.XENON)
 
+        instruments_url = reverse("parts:instrument_list")
         response = self.client.post(
-            reverse("parts:instrument_create"),
-            {"name": "新设备", "dry_mass": "0.02", "experiment_type": "重力",
-             "data_value": "12", "is_repeatable": "on", "requires_crew": "", "cost": "500"},
+            instruments_url,
+            {"action": "create", "prefix": "new",
+             "new-name": "新设备", "new-dry_mass": "0.02", "new-experiment_type": "重力",
+             "new-data_value": "12", "new-is_repeatable": "on", "new-requires_crew": "",
+             "new-cost": "500"},
         )
-        self.assertRedirects(response, reverse("parts:instrument_list"))
+        self.assertRedirects(response, instruments_url)
         instrument = ScienceInstrument.objects.get(name="新设备")
         self.assertTrue(instrument.is_repeatable)
         self.assertFalse(instrument.requires_crew)
 
         response = self.client.post(
-            reverse("parts:fueltank_delete", args=[FuelTank.objects.get(name="新罐").pk]),
-            {"confirmed": "yes"},
+            tanks_url,
+            {"action": "delete", "pk": FuelTank.objects.get(name="新罐").pk, "confirmed": "yes"},
         )
-        self.assertRedirects(response, reverse("parts:fueltank_list"))
+        self.assertRedirects(response, tanks_url)
         response = self.client.post(
-            reverse("parts:instrument_delete", args=[instrument.pk]), {"confirmed": "yes"},
+            instruments_url, {"action": "delete", "pk": instrument.pk, "confirmed": "yes"},
         )
-        self.assertRedirects(response, reverse("parts:instrument_list"))
+        self.assertRedirects(response, instruments_url)
         self.assertFalse(FuelTank.objects.filter(name="新罐").exists())
         self.assertFalse(ScienceInstrument.objects.filter(pk=instrument.pk).exists())
 
@@ -176,10 +185,12 @@ class ReferenceListPagesTests(TestCase):
         engine = Engine.objects.get(name="引擎 A")
         RocketStage.objects.create(rocket=rocket, stage_order=1, engine=engine, structure_mass=0.1)
         response = self.client.post(
-            reverse("parts:engine_delete", args=[engine.pk]), {"confirmed": "yes"}, follow=True,
+            reverse("parts:engine_list"),
+            {"action": "delete", "pk": engine.pk, "confirmed": "yes"}, follow=True,
         )
         self.assertTrue(Engine.objects.filter(pk=engine.pk).exists())
         self.assertContains(response, "删除失败")
+
 
     def test_reference_pages_have_no_admin_link(self):
         for name in (

@@ -1,7 +1,7 @@
-"""参考数据的四个列表页与部件的增删改（文档 11 第 4.2 / 4.3 节）。
+"""参考数据的四个列表页与部件的弹窗增删改（文档 11 / 12）。
 
-引擎 / 燃料罐 / 科学设备跨存档共用，前台可就地增删改；天体由 fixture 提供，只读。
-**每类数据独立成页**，二级导航在 `templates/parts/reference_base.html` 里。
+引擎 / 燃料罐 / 科学设备跨存档共用，前台用弹窗就地增删改（POST 回各自列表页）；
+天体由 fixture 提供，只读。**每类数据独立成页**，二级导航在 `templates/parts/reference_base.html` 里。
 """
 
 from django.contrib import messages
@@ -9,7 +9,7 @@ from django.urls import reverse
 from django.views.generic import CreateView, DeleteView, ListView, RedirectView, UpdateView
 
 from core.models import Body
-from core.views import FormPageMixin, SafeDeleteMixin
+from core.views import CrudListView, FormPageMixin, SafeDeleteMixin
 
 from .forms import EngineForm, FuelTankForm, ScienceInstrumentForm
 from .models import Engine, FuelTank, ScienceInstrument
@@ -24,20 +24,23 @@ class ReferenceRedirectView(RedirectView):
         return reverse("parts:engine_list")
 
 
-class EngineListView(ListView):
+class EngineListView(CrudListView):
     model = Engine
+    form_class = EngineForm
     template_name = "parts/engine_list.html"
     context_object_name = "engines"
 
 
-class FuelTankListView(ListView):
+class FuelTankListView(CrudListView):
     model = FuelTank
+    form_class = FuelTankForm
     template_name = "parts/fueltank_list.html"
     context_object_name = "fuel_tanks"
 
 
-class ScienceInstrumentListView(ListView):
+class ScienceInstrumentListView(CrudListView):
     model = ScienceInstrument
+    form_class = ScienceInstrumentForm
     template_name = "parts/instrument_list.html"
     context_object_name = "instruments"
 

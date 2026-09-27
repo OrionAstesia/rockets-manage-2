@@ -307,6 +307,22 @@ class SaveScopedCrudView(DialogCrudMixin, ListView):
 
 
 
+class CrudListView(DialogCrudMixin, ListView):
+    """无存档归属的「列表 + 弹窗增删改」基类（参考数据：引擎/燃料罐/科学设备，文档 12 §5.4）。
+
+    与 `SaveScopedCrudView` 的唯一区别：`get_scoped_object()` 不按 `program` 过滤，
+    表单也不需要 `program` 参数（这三张表没有存档外键）。
+    """
+
+    def get_scoped_object(self, pk):
+        if not (pk and str(pk).isdigit()):
+            return None
+        return self.model.objects.filter(pk=pk).first()
+
+    def build_form(self, data, instance, prefix=None):
+        return self.form_class(data, instance=instance, prefix=prefix)
+
+
 class HomeView(TemplateView):
     """主页 `/`：**暂空**，等后续开发补充（文档 11 第 2.1 节）。
 

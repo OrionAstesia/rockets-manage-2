@@ -3,10 +3,7 @@
 {% block title %}科学设备 · 参考数据{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-3">
-  <span class="text-muted small">共 {{ instruments|length }} 个科学设备</span>
-  <a class="btn btn-sm btn-primary" href="{% url 'parts:instrument_create' %}">+ 新增</a>
-</div>
+<p class="text-muted small">共 {{ instruments|length }} 个科学设备</p>
 <div class="table-responsive">
   <table class="table table-sm table-striped align-middle">
     <thead class="table-light">
@@ -22,26 +19,30 @@
       </tr>
     </thead>
     <tbody>
-      {% for instrument in instruments %}
+      {% for row in rows %}
       <tr>
-        <td>{{ instrument.name }}</td>
-        <td class="text-end">{{ instrument.dry_mass }}</td>
-        <td>{{ instrument.experiment_type|default:"—" }}</td>
-        <td class="text-end">{{ instrument.data_value }}</td>
-        <td>{{ instrument.is_repeatable|yesno:"是,否" }}</td>
-        <td>{{ instrument.requires_crew|yesno:"是,否" }}</td>
-        <td class="text-end">{{ instrument.cost }}</td>
+        <td>{{ row.obj.name }}</td>
+        <td class="text-end">{{ row.obj.dry_mass }}</td>
+        <td>{{ row.obj.experiment_type|default:"—" }}</td>
+        <td class="text-end">{{ row.obj.data_value }}</td>
+        <td>{{ row.obj.is_repeatable|yesno:"是,否" }}</td>
+        <td>{{ row.obj.requires_crew|yesno:"是,否" }}</td>
+        <td class="text-end">{{ row.obj.cost }}</td>
         <td class="text-end text-nowrap">
-          <a class="btn btn-sm btn-outline-secondary" href="{% url 'parts:instrument_update' instrument.pk %}">编辑</a>
-          <form class="d-inline" method="post" action="{% url 'parts:instrument_delete' instrument.pk %}">
-            {% csrf_token %}<button type="submit" class="btn btn-sm btn-outline-danger">删除</button>
-          </form>
+          <button type="button" class="btn btn-sm btn-outline-secondary" data-open-dialog="{{ row.edit_id }}">编辑</button>
+          <button type="button" class="btn btn-sm btn-outline-danger" data-open-dialog="{{ row.del_id }}">删除</button>
         </td>
       </tr>
       {% empty %}
-      <tr><td colspan="8" class="text-muted">还没有科学设备。点「+ 新增」录入一个。</td></tr>
+      <tr><td colspan="8" class="text-muted">还没有科学设备。点右下角的 <strong>+</strong> 录入一个。</td></tr>
       {% endfor %}
     </tbody>
   </table>
 </div>
+
+{% include "includes/_dialog.html" with dialog_id="dlg-new" title="新增科学设备" action="create" form=new_form prefix="new" is_open=open_new %}
+{% for row in rows %}
+  {% include "includes/_dialog.html" with dialog_id=row.edit_id title=row.obj.name action="update" form=row.form pk=row.obj.pk prefix=row.prefix is_open=row.open_edit %}
+  {% include "includes/_dialog.html" with dialog_id=row.del_id title="删除科学设备" action="delete" pk=row.obj.pk confirm_text="确定删除这个科学设备？此操作不可恢复。" danger=True %}
+{% endfor %}
 {% endblock %}
